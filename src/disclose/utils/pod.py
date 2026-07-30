@@ -818,12 +818,5 @@ def fouinel() -> None:
     print("AHAH")
     print("AHAH")
     print("AHAH")
-    print("AHAH")
-    print("AHAH")
-    print("AHAH")
-    print("AHAH")
-    print("AHAH")
-    print("AHAH")
-    print("AHAH")
-    print("AHAH")
+
     return None
