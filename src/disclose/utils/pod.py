@@ -812,3 +812,7 @@ def percent_barplot(
     ax.set_xlabel(x)
 
     return ax
+
+
+def fouinel():
+    print("AHAH")
