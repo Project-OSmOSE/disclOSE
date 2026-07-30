@@ -814,5 +814,16 @@ def percent_barplot(
     return ax
 
 
-def fouinel():
+def fouinel() -> None:
     print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    print("AHAH")
+    return None
