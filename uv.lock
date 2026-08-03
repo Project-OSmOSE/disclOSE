@@ -635,7 +635,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.1" },
     { name = "notebook", specifier = ">=7.4.5" },
     { name = "numpy", specifier = ">=1.24.2" },
-    { name = "osekit", specifier = ">=1.0.0" },
+    { name = "osekit", specifier = ">=1.2.0" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pypamguard", specifier = ">=1.0.0" },
     { name = "pytz", specifier = ">=2025.1" },
@@ -1730,7 +1730,7 @@ wheels = [
 
 [[package]]
 name = "osekit"
-version = "1.1.1"
+version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "matplotlib" },
@@ -1745,9 +1745,9 @@ dependencies = [
     { name = "soxr" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/11/74/bf35cf3359cb717fa8c8d32ead60a2afac55f405e955485041da1db2f6d0/osekit-1.1.1.tar.gz", hash = "sha256:471e3f987269f6f8d09b280ad31884964c009a4b352d946e72c968e3b7ed25cd", size = 7376479, upload-time = "2026-07-27T17:32:45.893Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/66/2e/9edeea8f135922d48e6cf6bc7d0ae10071beace6194d2fafce797bad6423/osekit-1.2.0.tar.gz", hash = "sha256:b206989f1ae13d361eddf08f2cb6151bf4b29ed240472039df694695a96a41c8", size = 8179247, upload-time = "2026-07-30T15:27:38.319Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/dc/73/06e755df47f37035a536645df131bad3d6ab839070d76977510adb77da9c/osekit-1.1.1-py3-none-any.whl", hash = "sha256:fc227a44e15c78716fec4c693a776a05510cb675c59bf4fe7bb6fac274e97f66", size = 95220, upload-time = "2026-07-27T17:32:44.456Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/f8/ae5a5dd53528187cbb89ab6ab1c31d85cd36c6f88cf25d0424a853b2f11e/osekit-1.2.0-py3-none-any.whl", hash = "sha256:0e06806b30decbde0c49626d4f0016f6229523b4451ce0016eb2b344c0a68ab4", size = 96368, upload-time = "2026-07-30T15:27:37.003Z" },
 ]
 
 [[package]]
