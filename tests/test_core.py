@@ -2,10 +2,11 @@ from unittest.mock import patch
 
 import pytest
 from matplotlib import pyplot as plt
-from pandas import DataFrame, Timedelta, Timestamp, date_range
+from pandas import DataFrame, Timedelta, Timestamp, date_range, IntervalIndex, Series
 from pandas.tseries import frequencies
 from pytz import timezone
 
+from dataclass.recording_period import RecordingPeriod
 from disclose.dataclass.data_aplose import DataAplose
 from disclose.utils.core import (
     add_recording_period,
@@ -23,6 +24,7 @@ from disclose.utils.core import (
     timedelta_to_str,
 )
 from disclose.utils.filtering import add_weak_detection
+from utils.filtering import get_max_time
 
 
 def test_coordinates_valid_input(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -221,6 +223,89 @@ def test_get_count_multiple_labels_annotators(sample_df: DataFrame) -> None:
 def test_get_count_empty_df() -> None:
     with pytest.raises(ValueError, match="`df` contains no data"):
         get_count(DataFrame(), Timedelta("1h"))
+
+
+def _make_effort(
+    active_windows: list[tuple[Timestamp, Timestamp]],
+    full_start: Timestamp,
+    full_end: Timestamp,
+    origin: Timedelta,
+) -> RecordingPeriod:
+    """Build a fake RecordingPeriod-like object with fine-grained on/off samples.
+
+    `active_windows` are [start, end) spans marked as recording (1);
+    everything else in [full_start, full_end) is 0.
+    """
+    idx = date_range(full_start, full_end, freq=origin, inclusive="left")
+    values = Series(0, index=idx)
+    for start, end in active_windows:
+        values.loc[(values.index >= start) & (values.index < end)] = 1
+    counts = Series(
+        values.to_numpy(),
+        index=IntervalIndex.from_arrays(idx, idx + origin, closed="left"),
+    )
+    return RecordingPeriod(counts=counts, timebin_origin=origin)
+
+
+def test_get_count_with_effort_restricts_to_active_bins(sample_df: DataFrame) -> None:
+    df = DataAplose(sample_df).filter_df(annotator="ann1", label="lbl1")
+    bin = get_max_time(df)
+    start = df["start_datetime"].min()
+    stop = df["start_datetime"].min() + Timedelta("1min")
+
+    effort = _make_effort(
+        active_windows=[(start, stop)],
+        full_start=start,
+        full_end=stop,
+        origin=bin,
+    )
+
+    result = get_count(df, bin_size=bin, effort=effort)
+
+    assert result.index.min() == start
+    assert result.index.max() < stop
+
+
+def test_get_count_with_effort_all_zero_raises(sample_df: DataFrame) -> None:
+    df = DataAplose(sample_df).filter_df(annotator="ann1", label="lbl1")
+
+    start = df["start_datetime"].min()
+    stop = df["start_datetime"].min() + Timedelta("1min")
+    bin = get_max_time(df)
+
+    effort = _make_effort(
+        active_windows=[],
+        full_start=start,
+        full_end=stop,
+        origin=bin,
+    )
+
+    with pytest.raises(ValueError, match="`effort` contains no recording activity"):
+        get_count(df, bin_size=Timedelta("1h"), effort=effort)
+
+
+def test_get_count_with_effort_matches_full_coverage(sample_df: DataFrame) -> None:
+    df = DataAplose(sample_df).filter_df(annotator="ann1", label="lbl1")
+
+    bin = get_max_time(df)
+    start = df["start_datetime"].min()
+    stop = df["start_datetime"].max() + bin
+
+    effort = _make_effort(
+        active_windows=[(start, stop)],
+        full_start=start,
+        full_end=stop,
+        origin=bin,
+    )
+
+    result_with_effort = get_count(df, bin_size=bin, effort=effort)
+    result_without_effort = get_count(df, bin_size=bin)
+
+    assert list(result_with_effort.index) == list(result_without_effort.index)
+    assert (
+        result_with_effort["lbl1-ann1"].sum()
+        == result_without_effort["lbl1-ann1"].sum()
+    )
 
 
 # %% get_labels_and_annotators
