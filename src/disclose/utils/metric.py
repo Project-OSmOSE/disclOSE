@@ -7,7 +7,7 @@ from typing import TypedDict
 
 from pandas import DataFrame, DatetimeIndex, Series, Timestamp
 
-from dataclass.recording_period import RecordingPeriod
+from disclose.dataclass.recording_period import RecordingPeriod
 from disclose.utils.core import get_count
 from disclose.utils.filtering import (
     get_annotators,

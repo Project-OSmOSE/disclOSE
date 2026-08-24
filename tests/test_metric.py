@@ -15,8 +15,8 @@ from disclose.utils.metric import (
     _compute_scores,
     _log_detection_results,
 )
-from utils.core import get_count
-from utils.filtering import get_annotators, get_labels
+from disclose.utils.core import get_count
+from disclose.utils.filtering import get_annotators, get_labels
 
 
 # %% _get_classification_timestamps
