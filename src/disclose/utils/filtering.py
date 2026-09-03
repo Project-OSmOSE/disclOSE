@@ -244,8 +244,7 @@ def filter_by_confidence(df: DataFrame, confidence: float | None) -> DataFrame:
         raise ValueError(msg)
 
     if "confidence" not in df.columns:
-        msg = "'confidence' column not present if DataFrame."
-        raise ValueError(msg)
+        return df
 
     return df[df["confidence"] >= confidence]
 
@@ -263,7 +262,18 @@ def read_dataframe(file: Path, rows: int | None = None) -> DataFrame:
 
     # legacy update
     if "is_box" in df.columns:
-        df["is_box"] = df["is_box"].map({0: "WEAK", 1: "BOX"})
+        if "type" in df.columns:
+            df = df.drop(["is_box"], axis=1)
+        else:
+            df["is_box"] = df["is_box"].map({0: "WEAK", 1: "BOX"})
+
+    if "min_frequency" in df.columns:
+        if "start_frequency" in df.columns:
+            df = df.drop(["min_frequency"], axis=1)
+
+    if "max_frequency" in df.columns:
+        if "end_frequency" in df.columns:
+            df = df.drop(["max_frequency"], axis=1)
 
     df = df.rename(
         columns={
