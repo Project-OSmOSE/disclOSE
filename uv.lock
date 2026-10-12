@@ -661,11 +661,11 @@ requires-dist = [
     { name = "astral", specifier = ">=3.2" },
     { name = "easygui", specifier = ">=0.98.3" },
     { name = "gpxpy", specifier = ">=1.6.2" },
-    { name = "ipykernel", specifier = ">=6.30.1" },
+    { name = "ipykernel", specifier = ">=7.4.0" },
     { name = "matplotlib", specifier = ">=3.11.2" },
     { name = "notebook", specifier = ">=7.6.3" },
     { name = "numpy", specifier = ">=2.5.3" },
-    { name = "osekit", specifier = ">=1.2.0" },
+    { name = "osekit", specifier = ">=1.2.1" },
     { name = "pandas", specifier = ">=3.0.6" },
     { name = "pypamguard", specifier = ">=1.0.0" },
     { name = "pytz", specifier = ">=2026.4" },
@@ -947,7 +947,7 @@ wheels = [
 
 [[package]]
 name = "ipykernel"
-version = "7.3.0"
+version = "7.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "appnope", marker = "sys_platform == 'darwin'" },
@@ -959,14 +959,13 @@ dependencies = [
     { name = "matplotlib-inline" },
     { name = "nest-asyncio2" },
     { name = "packaging" },
-    { name = "psutil" },
     { name = "pyzmq" },
     { name = "tornado" },
     { name = "traitlets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3d/c4/e4a38f579de4225a561305666f7541cdabb30075def2aa1ac17bd73c1fb5/ipykernel-7.3.0.tar.gz", hash = "sha256:9acaaaf97d16355166e4085afe9d225bfbdf2b7ef520f9df3be8f2b248275e09", size = 184899, upload-time = "2026-06-10T08:41:25.481Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7a/05/e5499c8b762387d83926bf0389e8fff888c9bf6e7af30566a8527bc12f4a/ipykernel-7.4.0.tar.gz", hash = "sha256:4330114d22b9b33575b2c7c68753fc8faabbbcfbc60b0cdff9f14dd4ce63742f", size = 192731, upload-time = "2026-09-29T16:33:11.468Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/02/77b271f5dc58bfbc0b577c877b2365d1ffea2afe66a80c13f2312820348c/ipykernel-7.3.0-py3-none-any.whl", hash = "sha256:897eb64da762549ef610698fca5e9675195ec6ac8ec7f19d81ce1ca20c876057", size = 120583, upload-time = "2026-06-10T08:41:23.648Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/f8/8b5c10c7f36ab5a3b5c4703669e5b14e44e98782b58e535dd30670e8799a/ipykernel-7.4.0-py3-none-any.whl", hash = "sha256:a6757f790ddc5a6006b813d82da1a9dbb65b3a00f2b6607df776418c6566ec1c", size = 123184, upload-time = "2026-09-29T16:33:09.612Z" },
 ]
 
 [[package]]
@@ -1789,7 +1788,7 @@ wheels = [
 
 [[package]]
 name = "osekit"
-version = "1.2.0"
+version = "1.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "matplotlib" },
@@ -1804,9 +1803,9 @@ dependencies = [
     { name = "soxr" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/66/2e/9edeea8f135922d48e6cf6bc7d0ae10071beace6194d2fafce797bad6423/osekit-1.2.0.tar.gz", hash = "sha256:b206989f1ae13d361eddf08f2cb6151bf4b29ed240472039df694695a96a41c8", size = 8179247, upload-time = "2026-07-30T15:27:38.319Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/37/aa/e1a97e8d6952e9002203174a3448e482b8d4eb9b4832921ddcf907eb1874/osekit-1.2.1.tar.gz", hash = "sha256:b352a7428a795aa554f0e0cdd96e3713ab5cdb90c0340f56ccf4e879277ef955", size = 8216983, upload-time = "2026-09-29T17:50:15.959Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b3/f8/ae5a5dd53528187cbb89ab6ab1c31d85cd36c6f88cf25d0424a853b2f11e/osekit-1.2.0-py3-none-any.whl", hash = "sha256:0e06806b30decbde0c49626d4f0016f6229523b4451ce0016eb2b344c0a68ab4", size = 96368, upload-time = "2026-07-30T15:27:37.003Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/0b/d572263fa5c431d76bdb1f8e1631329134d704af0614fb3902b5a3601662/osekit-1.2.1-py3-none-any.whl", hash = "sha256:86fd16fc65572d1f500888b3e892754851eb9650d6078ca4d5a1ce6b26b342ae", size = 97555, upload-time = "2026-09-29T17:50:14.473Z" },
 ]
 
 [[package]]
