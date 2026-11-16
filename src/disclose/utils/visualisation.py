@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from itertools import cycle
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,6 +21,7 @@ from pandas import (
     Timestamp,
     concat,
     date_range,
+    crosstab,
 )
 from pandas.tseries import frequencies
 from scipy.stats import pearsonr
@@ -31,11 +32,12 @@ from disclose.utils.core import (
     get_labels_and_annotators,
     get_sun_times,
     get_time_range_and_bin_size,
-    timedelta_to_str,
     round_begin_end_timestamps,
+    timedelta_to_str,
 )
 from disclose.utils.filtering import (
     filter_by_annotator,
+    get_labels,
     get_max_time,
     get_timezone,
 )
@@ -162,6 +164,105 @@ def histo(
             lat, _ = get_coordinates()
         add_season_period(ax, northern=lat >= 0)
 
+
+def arc(ax: Axes, h0: float, h1: float, color: str, thickness: float = 0.025) -> None:
+    """Draw a colored band on the outer edge of a polar plot, from hour h0 to h1."""
+    ax.bar(
+        np.deg2rad((h0 + h1) / 2 * 15),
+        height=thickness,
+        width=np.deg2rad((h1 - h0) * 15),
+        bottom=1,
+        color=color,
+        edgecolor="none",
+        clip_on=False,
+    )
+
+
+def polar(
+    df: DataFrame,
+    ax: Axes | None = None,
+    show_rise_set: bool = False,
+    coordinates: tuple[float | int | None, float | int | None] | None = None,
+    **kwargs: Any,
+) -> tuple[Axes, Series]:
+    """Plot the mean proportion of detected bins per hour of day on a polar axis.
+
+    Parameters
+    ----------
+    df: Dataframe
+        Detections, with `start_datetime` and `end_datetime` columns.
+    ax: Axes
+        Polar axes to draw on. A square figure is created if None.
+    show_rise_set: bool
+        If True, draw a day/night band on the outer edge: blue is night,
+        yellow is day, grey is the sunrise/sunset range over the period.
+    coordinates: tuple[float|int, float|int]
+        (latitude, longitude), required if `show_rise_set` is True.
+    **kwargs
+        Forwarded to `ax.bar` (e.g. color, alpha, edgecolor).
+
+    Returns
+    -------
+    The axes and the mean proportion of detections for each hour of the day.
+
+    """
+    kwargs.pop("bin_size", None)
+    if show_rise_set and coordinates is None:
+        msg = "`coordinates` is required when show_rise_set=True"
+        raise ValueError(msg)
+
+    kwargs.setdefault("alpha", 1)
+    kwargs.setdefault("zorder", 3)
+
+    label = get_labels(df)
+    bin_size = get_max_time(df)
+    start = df["start_datetime"]
+    day, hour = start.dt.date, start.dt.hour
+
+    # Detections per day and hour, with empty days and hours filled with zeros
+    all_days = date_range(min(day), max(day), freq="D").date
+    counts = crosstab(day, hour).reindex(
+        index=all_days, columns=range(24), fill_value=0
+    )
+
+    # Proportion of bins with a detection per hour, averaged over days
+    prop = counts / (Timedelta("1h") / bin_size)
+    mean_prop = prop.mean(axis=0)
+
+    if ax is None:
+        _, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(6, 6))
+
+    ax.bar(
+        2 * np.pi * (mean_prop.index.values + 0.5) / 24,
+        mean_prop.values,
+        width=2 * np.pi / 24 * 0.9,
+        **kwargs,
+    )
+    ax.set_ylim(0, 1)
+    ax.set_theta_zero_location("N")
+    ax.set_theta_direction(-1)
+    ax.set_xticks(np.deg2rad(np.arange(0, 360, 15)))
+    ax.set_xticklabels([f"{h:02d}h" for h in range(24)])
+    ax.set_yticklabels([])
+    n_days = len(all_days)
+    ax.set_title(f"{label}  ({n_days} day{'s' if n_days > 1 else ''})")
+
+    if show_rise_set:
+        sunrise, sunset = get_sun_times(
+            min(df["start_datetime"]),
+            max(df["end_datetime"]),
+            *coordinates,
+        )
+        sr_min, sr_max = np.min(sunrise), np.max(sunrise)
+        ss_min, ss_max = np.min(sunset), np.max(sunset)
+
+        arc(ax, 0, sr_min, "tab:blue")  # night
+        arc(ax, sr_min, sr_max, "grey")  # sunrise range
+        arc(ax, sr_max, ss_min, "gold")  # day (sun up on all days)
+        arc(ax, ss_min, ss_max, "grey")  # sunset range
+        arc(ax, ss_max, 24, "tab:blue")  # night
+
+    return ax, mean_prop
 
 def _prepare_timeline_plot(
     df: DataFrame,
