@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from matplotlib.axes import Axes
-from matplotlib.colors import to_rgba
 from pandas import DataFrame, Timedelta, Timestamp
 
 from disclose.utils.visualisation import (
@@ -11,7 +10,6 @@ from disclose.utils.visualisation import (
     overview,
     set_y_axis_to_percentage,
 )
-
 
 
 def test_overview_runs_without_error(sample_df) -> None:
@@ -107,7 +105,8 @@ def test_lists_and_strings_combined():
     expected = ["Alice\nLabel1", "Bob\nLabel2"]
     assert result == expected
 
-#%% polar plot
+# %% polar plot
+
 
 @pytest.fixture
 def polar_ax() -> Axes:
@@ -116,7 +115,9 @@ def polar_ax() -> Axes:
     yield ax
     plt.close("all")
 
+
 from disclose.utils.visualisation import arc, polar
+
 
 @pytest.mark.parametrize(
     ("h0", "h1"),
@@ -146,7 +147,7 @@ def test_arc_custom_thickness_and_color(polar_ax: Axes) -> None:
 
 
 def test_polar_returns_axes_and_mean_proportion(
-    sample_df: DataFrame, polar_ax: Axes
+    sample_df: DataFrame, polar_ax: Axes,
 ) -> None:
     df = sample_df[
         (sample_df["annotator"] == "ann1")
@@ -237,7 +238,7 @@ def test_polar_ignores_bin_size_kwarg(sample_df: DataFrame, polar_ax: Axes) -> N
 
 
 def test_polar_rise_set_requires_coordinates(
-    sample_df: DataFrame, polar_ax: Axes
+    sample_df: DataFrame, polar_ax: Axes,
 ) -> None:
     with pytest.raises(ValueError, match="`coordinates` is required"):
         polar(sample_df, ax=polar_ax, show_rise_set=True)
@@ -265,7 +266,7 @@ def test_polar_rise_set_draws_day_night_arcs(
 
 
 def test_polar_without_rise_set_draws_no_arcs(
-    sample_df: DataFrame, polar_ax: Axes
+    sample_df: DataFrame, polar_ax: Axes,
 ) -> None:
     polar(sample_df, ax=polar_ax)
     assert len(polar_ax.patches) == 24

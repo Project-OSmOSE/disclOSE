@@ -8,45 +8,44 @@ plot time-based distributions, and manage metadata such as annotators and labels
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
 from pandas import (
+    NA,
     DataFrame,
     Series,
     Timedelta,
     Timestamp,
     concat,
+    cut,
     date_range,
     read_csv,
-    NA,
-    cut,
 )
 from pandas.tseries import offsets
 
 from disclose.dataclass.data_aplose_config import DataAploseConfig
-from disclose.utils.core import get_count, build_time_vector
+from disclose.dataclass.recording_period import RecordingPeriod
+from disclose.utils.core import build_time_vector, get_count
 from disclose.utils.filtering import (
+    _build_detection_vector,
     get_annotators,
     get_dataset,
     get_labels,
     get_timezone,
     load_detections,
-    _build_detection_vector,
 )
-from disclose.dataclass.recording_period import RecordingPeriod
 from disclose.utils.metric import detection_perf
 from disclose.utils.visualisation import (
     heatmap,
     histo,
     overview,
     plot_annotator_agreement,
+    polar,
     scatter,
     timeline,
-    polar,
 )
 
 if TYPE_CHECKING:
@@ -215,7 +214,7 @@ class DataAplose:
 
     @coordinates.setter
     def coordinates(self, value: tuple[float, float]) -> None:
-        if not isinstance(value, tuple) or len(value) != 2:  # noqa: PLR2004
+        if not isinstance(value, tuple) or len(value) != 2:  # ruff: ignore[magic-value-comparison]
             msg = "Coordinates must be a tuple of two floats: (lat, lon)."
             raise ValueError(msg)
         self.lat, self.lon = value
@@ -449,7 +448,7 @@ class DataAplose:
             _get_locator_from_offset(offset=x_ticks_res),
         )
         date_formatter = mdates.DateFormatter(
-            fmt=date_format, tz=self.start_datetime.tz
+            fmt=date_format, tz=self.start_datetime.tz,
         )
         ax.xaxis.set_major_formatter(date_formatter)
         ax.grid(linestyle="--", linewidth=0.2, axis="both", zorder=1)
@@ -592,7 +591,7 @@ class DataAplose:
                 effort=effort,
                 coordinates=(self.lat, self.lon),
             )
-            return
+            return None
 
         if mode == "heatmap":
             ax.set_xlim(self.start_datetime, self.end_datetime)
@@ -606,7 +605,7 @@ class DataAplose:
                 effort=effort,
                 coordinates=self.coordinates,
             )
-            return
+            return None
 
         if mode == "polar":
             if ax.name != "polar":
@@ -630,7 +629,7 @@ class DataAplose:
                 coordinates=self.coordinates,
                 effort=effort,
             )
-            return
+            return None
 
         if mode == "agreement":
             if not bin_size:
@@ -638,7 +637,7 @@ class DataAplose:
                 raise ValueError(msg)
             df_counts = get_count(df_filtered, bin_size)
             plot_annotator_agreement(df=df_counts, bin_size=bin_size, ax=ax)
-            return
+            return None
 
         if mode == "timeline":
             ax.set_xlim(self.start_datetime, self.end_datetime)
@@ -648,7 +647,7 @@ class DataAplose:
                 label,
             )
             timeline(df=df_filtered, ax=ax, color=color)
-            return
+            return None
 
         msg = f"Unsupported plot mode: {mode}"
         raise ValueError(msg)
@@ -656,7 +655,7 @@ class DataAplose:
     def add_dpm(self) -> None:
         """Add the detection per minute `DPM` column to DataFrame."""
         df_dpm = read_csv(
-            self.config.detection_file, parse_dates=["start_datetime", "end_datetime"]
+            self.config.detection_file, parse_dates=["start_datetime", "end_datetime"],
         )
         self.df["dpm_count"] = NA
         ts_detect_beg = df_dpm["start_datetime"].to_list()
@@ -673,7 +672,7 @@ class DataAplose:
                 bins = list(time_vector) + [time_vector[-1] + self.config.timebin_new]
 
                 detect_vec = _build_detection_vector(
-                    time_vector, ts_detect_beg, ts_detect_end
+                    time_vector, ts_detect_beg, ts_detect_end,
                 )
                 counts = (
                     cut(ts_detect_beg, bins=bins, right=False)
