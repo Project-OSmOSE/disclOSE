@@ -10,6 +10,8 @@ from disclose.utils.visualisation import (
     get_legend,
     overview,
     set_y_axis_to_percentage,
+    arc,
+polar,
 )
 
 
@@ -108,16 +110,12 @@ def test_lists_and_strings_combined():
 
 # %% polar plot
 
-
 @pytest.fixture
 def polar_ax() -> Axes:
     """Polar axes, closed after the test."""
     _, ax = plt.subplots(subplot_kw={"projection": "polar"})
     yield ax
     plt.close("all")
-
-
-from disclose.utils.visualisation import arc, polar
 
 
 @pytest.mark.parametrize(
