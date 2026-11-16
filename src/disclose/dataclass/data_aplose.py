@@ -8,11 +8,12 @@ plot time-based distributions, and manage metadata such as annotators and labels
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from dataclasses import dataclass, field
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from pandas import (
     DataFrame,
     Series,
@@ -45,6 +46,7 @@ from disclose.utils.visualisation import (
     plot_annotator_agreement,
     scatter,
     timeline,
+    polar,
 )
 
 if TYPE_CHECKING:
@@ -518,7 +520,7 @@ class DataAplose:
         annotator: str | list[str],
         label: str | list[str],
         **kwargs: bool | Timedelta | BaseOffset | str | list[str] | RecordingPeriod,
-    ) -> None:
+    ) -> Any:
         """Plot filtered data using the specified mode.
 
         Supports multiple plot types depending on the mode:
@@ -526,12 +528,13 @@ class DataAplose:
           - "scatter" / "heatmap": Map hourly detections on a timeline.
           - "agreement": Plot inter-annotator agreement regression.
           - "timeline": Plot a timeline of data.
+          - "polar": Polar plot of detections throughout the hours of the day.
 
         Parameters
         ----------
         mode: str
             Type of plot to generate.
-            Must be one of {"histogram", "scatter", "heatmap", "agreement"}.
+            Must be one of {"histogram", "scatter", "heatmap", "agreement", "polar"}.
         ax: plt.Axes
             Matplotlib Axes object to plot on.
         annotator: str | list[str]
@@ -560,14 +563,16 @@ class DataAplose:
         )
 
         dates = date_range(self.start_datetime, self.end_datetime)
+
         bin_size = kwargs.get("bin_size")
         legend = kwargs.get("legend", True)
         color = kwargs.get("color")
         season = kwargs.get("season")
         effort = kwargs.get("effort", False)
+        show_rise_set = kwargs.get("show_rise_set", True)
+
         if effort:
             effort = RecordingPeriod.from_config(config=self.config, bin_size=bin_size)
-        show_rise_set = kwargs.get("show_rise_set", True)
 
         if mode == "histogram":
             ax.set_xlim(self.start_datetime, self.end_datetime)
@@ -602,6 +607,17 @@ class DataAplose:
                 coordinates=self.coordinates,
             )
             return
+
+        if mode == "polar":
+            if ax.name != "polar":
+                msg = "Provided ax must have a polar projection."
+                raise ValueError(msg)
+            return polar(
+                df=df_filtered,
+                ax=ax,
+                coordinates=self.coordinates,
+                **kwargs,
+            )
 
         if mode == "scatter":
             ax.set_xlim(self.start_datetime, self.end_datetime)
