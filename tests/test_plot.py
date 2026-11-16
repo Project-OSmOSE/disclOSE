@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from matplotlib.axes import Axes
+from matplotlib.colors import to_rgba
 from pandas import DataFrame, Timedelta, Timestamp
 
 from disclose.utils.visualisation import (
