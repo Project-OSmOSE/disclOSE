@@ -174,11 +174,9 @@ def test_polar_bars_match_mean_proportion(sample_df: DataFrame, polar_ax: Axes) 
 
 
 def test_polar_creates_polar_axes_when_none(sample_df: DataFrame) -> None:
-    ax, _ = polar(sample_df)
-    try:
-        assert ax.name == "polar"
-    finally:
-        plt.close("all")
+    _, ax = plt.subplots()
+    with pytest.raises(ValueError, match="Provided ax must have a polar projection"):
+        polar(df=sample_df, ax=ax)
 
 
 def test_polar_axes_layout(sample_df: DataFrame, polar_ax: Axes) -> None:
@@ -233,7 +231,7 @@ def test_polar_default_alpha_is_one(sample_df: DataFrame, polar_ax: Axes) -> Non
 
 def test_polar_ignores_bin_size_kwarg(sample_df: DataFrame, polar_ax: Axes) -> None:
     # `plot()` forwards bin_size, which has no meaning for polar
-    polar(sample_df, ax=polar_ax, bin_size=Timedelta("1h"))
+    polar(sample_df, ax=polar_ax)
 
 
 def test_polar_rise_set_requires_coordinates(

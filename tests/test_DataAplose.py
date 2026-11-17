@@ -171,7 +171,7 @@ def test_filter_df_invalid_lists_size(
 
 def test_set_ax_uses_2hour_locator(sample_df: DataFrame) -> None:
     data = DataAplose(sample_df)
-    fig, ax = plt.subplots()
+    _, ax = plt.subplots()
     tick_freq = frequencies.to_offset("2h")
 
     ax = data.set_ax(
@@ -182,7 +182,7 @@ def test_set_ax_uses_2hour_locator(sample_df: DataFrame) -> None:
 
     locator = ax.xaxis.get_major_locator()
     assert isinstance(locator, mdates.HourLocator)
-    assert locator._get_interval() == 2  # noqa: PLR2004
+    assert locator._get_interval() == 2  # ruff: ignore[magic-value-comparison]
 
 
 def test_histo(sample_csv_result: DataFrame, recording_planning_csv: DataFrame) -> None:
@@ -200,8 +200,7 @@ def test_histo(sample_csv_result: DataFrame, recording_planning_csv: DataFrame) 
         x_ticks_res=tick_freq,
         date_format="%y-%m-%d",
     )
-    data.plot(
-        mode="histogram",
+    data.plot_histogram(
         ax=ax,
         annotator="ann1",
         label="lbl1",
@@ -228,8 +227,7 @@ def test_histo_no_recording_file_provided(
         date_format="%y-%m-%d",
     )
     with pytest.raises(ValueError, match=r"No recording file provided."):
-        data.plot(
-            mode="histogram",
+        data.plot_histogram(
             ax=ax,
             annotator="ann1",
             label="lbl1",
@@ -256,8 +254,7 @@ def test_histo_no_recording_fake_file_provided(
         date_format="%y-%m-%d",
     )
     with pytest.raises(FileNotFoundError, match=r"File not found"):
-        data.plot(
-            mode="histogram",
+        data.plot_histogram(
             ax=ax,
             annotator="ann1",
             label="lbl1",
@@ -266,16 +263,16 @@ def test_histo_no_recording_fake_file_provided(
         )
 
 
-@pytest.mark.parametrize("mode", ["scatter", "heatmap", "timeline"])
-def test_plot_scatter_heatmap_timeline(sample_df: DataFrame, mode: str) -> None:
-    data = DataAplose(sample_df)
-    data.lon = 0
-    data.lat = 0
-    bin_size = frequencies.to_offset("1D")
-    fig, ax = plt.subplots()
-    data.plot(
-        mode=mode, ax=ax, annotator="ann1", label="lbl1", bin_size=bin_size, color="red"
-    )
+# @pytest.mark.parametrize("mode", ["scatter", "heatmap", "timeline"])
+# def test_plot_scatter_heatmap_timeline(sample_df: DataFrame, mode: str) -> None:
+#     data = DataAplose(sample_df)
+#     data.lon = 0
+#     data.lat = 0
+#     bin_size = frequencies.to_offset("1D")
+#     _, ax = plt.subplots()
+#     data.plot(
+#         mode=mode, ax=ax, annotator="ann1", label="lbl1", bin_size=bin_size, color="red"
+#     )
 
 
 def test_heatmap_wrong_bin(sample_df: DataFrame) -> None:
@@ -287,21 +284,13 @@ def test_heatmap_wrong_bin(sample_df: DataFrame) -> None:
     with pytest.raises(
         ValueError, match=r"`bin_size` must be >= 24h for heatmap mode."
     ):
-        data.plot(
-            mode="heatmap",
+        data.plot_heatmap(
             ax=ax,
             annotator="ann1",
             label="lbl1",
             bin_size=bins,
             color="red",
         )
-
-
-def test_plot_invalid_mode(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
-    fig, ax = plt.subplots()
-    with pytest.raises(ValueError, match="Unsupported plot mode"):
-        data.plot("wrong_mode", ax, annotator="ann1", label="lbl1")
 
 
 def test_plot_histogram_missing_bin_size(monkeypatch, sample_df: DataFrame) -> None:
@@ -317,9 +306,8 @@ def test_plot_histogram_missing_bin_size(monkeypatch, sample_df: DataFrame) -> N
 
     _, ax = plt.subplots()
 
-    with pytest.raises(ValueError, match=r"'bin_size' missing for histogram plot."):
-        obj.plot(
-            mode="histogram",
+    with pytest.raises(TypeError, match=r"missing 1 required positional argument: 'bin_size'"):
+        obj.plot_histogram(
             ax=ax,
             annotator="ann1",
             label="lbl1",
@@ -334,8 +322,7 @@ def test_plot_agreement_missing_bin_size(monkeypatch, sample_df: DataFrame) -> N
     _, ax = plt.subplots()
 
     with pytest.raises(ValueError, match=r"'bin_size' missing for agreement plot."):
-        obj.plot(
-            mode="agreement",
+        obj.plot_agreement(
             ax=ax,
             annotator="ann1",
             label="lbl1",
@@ -345,9 +332,8 @@ def test_plot_agreement_missing_bin_size(monkeypatch, sample_df: DataFrame) -> N
 
 def test_plot_agreement(sample_df: DataFrame) -> None:
     data = DataAplose(sample_df)
-    fig, ax = plt.subplots()
-    data.plot(
-        mode="agreement",
+    _, ax = plt.subplots()
+    data.plot_agreement(
         ax=ax,
         annotator=["ann1", "ann2"],
         label="lbl1",

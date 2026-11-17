@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import astral
 import easygui
 from astral.sun import sunrise, sunset
+from matplotlib.axes import Axes
 from pandas import (
     DataFrame,
     DatetimeIndex,
@@ -211,10 +212,11 @@ def json2df(json_path: Path) -> DataFrame:
 
 
 def add_season_period(
-    ax: plt.Axes,
+    ax: Axes,
     bar_height: int = 10,
     *,
     northern: bool = True,
+    **kwargs: Any,
 ) -> None:
     """Add a bar at the top of the plot to seasons.
 
@@ -222,7 +224,7 @@ def add_season_period(
     ----------
     northern: boolean, default True.
         Specify if the seasons are northern or austral
-    ax: plt.Axes
+    ax: Axes
         Matplotlib Axes to add the bar to.
     bar_height: int
         Bar height in pixels
@@ -237,7 +239,7 @@ def add_season_period(
     bins = date_range(
         start=Timestamp(ax.get_xlim()[0], unit="D").round("1ms"),
         end=Timestamp(ax.get_xlim()[1], unit="D").round("1ms"),
-        freq=Timedelta(patches[0].get_width(), "D").round("1ms"),
+        periods=2000,
     )
 
     season_colors = {
@@ -270,7 +272,10 @@ def add_season_period(
             linewidth=0,
         )
 
-    ax.set_ylim(ax.dataLim.ymin, ax.dataLim.ymax)
+    ymin, _ = ax.get_ylim()
+    ax.set_ylim(ymin, ax.dataLim.ymax)
+
+
 
 
 def set_bar_height(ax: plt.Axes, pixel_height: int = 10) -> float:
