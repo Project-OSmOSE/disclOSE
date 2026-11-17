@@ -234,8 +234,6 @@ def add_season_period(
         msg = "Axes have no data"
         raise ValueError(msg)
 
-    patches = ax.patches
-
     bins = date_range(
         start=Timestamp(ax.get_xlim()[0], unit="D").round("1ms"),
         end=Timestamp(ax.get_xlim()[1], unit="D").round("1ms"),
