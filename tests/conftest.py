@@ -5,8 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 import soundfile as sf
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from osekit.utils.timestamp import strftime_osmose_format
-from pandas import DataFrame, read_csv
+from pandas import DataFrame, read_csv, date_range, DatetimeIndex
 
 from disclose.dataclass.data_aplose import DataAplose
 
@@ -148,6 +150,21 @@ def sample_df() -> DataFrame:
 
 
 @pytest.fixture
+def df_ann1_lbl1(sample_df: DataFrame) -> DataFrame:
+    """Weak detections of a single annotator/label pair."""
+    return sample_df[
+        (sample_df["annotator"] == "ann1")
+        & (sample_df["label"] == "lbl1")
+        & (sample_df["type"] == "WEAK")
+    ].reset_index(drop=True)
+
+
+@pytest.fixture
+def time_range(df_ann1_lbl1: DataFrame) -> DatetimeIndex:
+    return date_range("2025-01-25", "2025-01-27", freq="D", tz="UTC")
+
+
+@pytest.fixture
 def sample_data_aplose(sample_df: DataFrame) -> DataAplose:
     return DataAplose(sample_df)
 
@@ -242,3 +259,10 @@ def recording_planning_csv(tmp_path) -> Path:
     path = tmp_path / "recording_planning.csv"
     path.write_text(RECORDING_PLANNING_CSV)
     return path
+
+@pytest.fixture
+def ax() -> Axes:
+    """Plain axes, closed after the test."""
+    _, ax = plt.subplots()
+    yield ax
+    plt.close("all")

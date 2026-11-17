@@ -700,7 +700,7 @@ def timeline(
     color = kwargs.get("color")
     effort = kwargs.get("effort")
     season = kwargs.get("season")
-    lat, _ = kwargs.get("coordinates")
+    lat, _ = kwargs.get("coordinates") or (None, None)
 
     labels, _ = get_labels_and_annotators(df)
 
@@ -745,11 +745,10 @@ def get_legend(annotators: str | list[str], labels: str | list[str]) -> list[str
 
 def get_bin_size_str(bin_size: Timedelta | BaseOffset) -> str:
     """Return the bin size as a string."""
-    return (
-        timedelta_to_str(bin_size)
-        if isinstance(bin_size, Timedelta)
-        else bin_size.freqstr
-    )
+    if isinstance(bin_size, Timedelta):
+        return timedelta_to_str(bin_size)
+
+    return f"{bin_size.n}{bin_size.rule_code}"
 
 
 def set_y_axis_to_percentage(ax: plt.Axes, max_val: float) -> None:

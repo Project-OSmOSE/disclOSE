@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+import pytz
 from matplotlib.axes import Axes
+import matplotlib.dates as mdates
 from matplotlib.colors import to_rgba
-from pandas import DataFrame, Timedelta, Timestamp
+from pandas import DataFrame, Timedelta, Timestamp, date_range, DatetimeIndex
+from pandas.tseries import frequencies
 
 from disclose.utils.visualisation import (
     _wrap_xtick_labels,
@@ -11,7 +14,12 @@ from disclose.utils.visualisation import (
     overview,
     set_y_axis_to_percentage,
     arc,
-polar,
+    polar,
+    histo,
+    _prepare_timeline_plot,
+    scatter,
+    timeline,
+    heatmap,
 )
 
 
@@ -267,3 +275,187 @@ def test_polar_without_rise_set_draws_no_arcs(
 ) -> None:
     polar(sample_df, ax=polar_ax)
     assert len(polar_ax.patches) == 24
+
+# %% histo
+
+@pytest.fixture
+def df_counts() -> DataFrame:
+    idx = date_range("2025-01-01", periods=5, freq="1D", tz="UTC")
+    return DataFrame({"lbl1-ann1": [1, 2, 0, 3, 1]}, index=idx)
+
+
+def test_histo_labels_and_bars(ax: Axes, df_counts: DataFrame) -> None:
+    histo(
+        df=df_counts,
+        ax=ax,
+        bin_size=Timedelta("1D"),
+        time_bin=Timedelta("10s"),
+        color="tab:blue",
+        coordinates=(None, None),
+    )
+
+    assert len(ax.patches) == len(df_counts)
+    assert [p.get_height() for p in ax.patches] == df_counts["lbl1-ann1"].tolist()
+    assert ax.get_ylabel() == "Detections (10s)"
+    assert ax.get_xlabel() == "Bin size (1D)"
+    assert ax.get_title() == "annotator: ann1\nlabel: lbl1"
+
+
+def test_histo_not_enough_data(
+    ax: Axes, df_counts: DataFrame, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level("WARNING"):
+        histo(
+            df=df_counts.iloc[:1],
+            ax=ax,
+            bin_size=Timedelta("1D"),
+            time_bin=Timedelta("10s"),
+            coordinates=(None, None),
+        )
+
+    assert "do not contains enough detections" in caplog.text
+    assert len(ax.patches) == 0
+
+
+# %% _prepare_timeline_plot
+
+def test_prepare_timeline_plot_axes(
+    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex
+) -> None:
+    _prepare_timeline_plot(
+        df_ann1_lbl1,
+        ax,
+        bins=time_range,
+        coordinates=(48.39, -4.49),
+    )
+
+    assert ax.get_xlim() == pytest.approx(
+        (mdates.date2num(time_range[0]), mdates.date2num(time_range[-1])),
+    )
+    assert ax.get_ylim() == (0, 24)
+    assert ax.get_ylabel() == "Hour"
+    assert ax.get_title() == "annotator: ann1\nlabel: lbl1"
+
+
+def test_prepare_timeline_plot_asks_for_missing_coordinates(
+    monkeypatch: pytest.MonkeyPatch,
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
+) -> None:
+    called = []
+    monkeypatch.setattr(
+        "disclose.utils.visualisation.get_coordinates",
+        lambda: called.append(True) or (48.39, -4.49),
+    )
+
+    _prepare_timeline_plot(
+        df_ann1_lbl1, ax, bins=time_range, coordinates=(None, None),
+    )
+
+    assert called
+
+
+def test_prepare_timeline_plot_rise_set(
+    monkeypatch: pytest.MonkeyPatch,
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
+) -> None:
+    called = []
+    monkeypatch.setattr(
+        "disclose.utils.visualisation.add_sunrise_sunset",
+        lambda *args, **kwargs: called.append(args),
+    )
+
+    _prepare_timeline_plot(
+        df_ann1_lbl1,
+        ax,
+        bins=time_range,
+        coordinates=(48.39, -4.49),
+        show_rise_set=True,
+    )
+
+    assert len(called) == 1
+
+
+def test_prepare_timeline_plot_several_timezones(
+    monkeypatch: pytest.MonkeyPatch,
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
+) -> None:
+    monkeypatch.setattr(
+        "disclose.utils.visualisation.get_timezone",
+        lambda df: [pytz.utc, pytz.FixedOffset(420)],
+    )
+
+    with pytest.raises(ValueError, match="Several timezones not supported."):
+        _prepare_timeline_plot(
+            df_ann1_lbl1,
+            ax,
+            bins=time_range,
+            coordinates=(48.39, -4.49),
+            show_rise_set=True,
+        )
+
+
+# %% scatter
+
+
+def test_scatter_points_and_legend(
+    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex
+) -> None:
+    scatter(df_ann1_lbl1, ax, time_range, coordinates=(0, 0))
+
+    assert len(ax.collections) == 1
+    assert len(ax.collections[0].get_offsets()) == len(df_ann1_lbl1)
+    assert [t.get_text() for t in ax.get_legend().get_texts()] == ["ann1 - lbl1"]
+    assert ax.get_ylim() == (0, 24)
+
+
+# %% heatmap
+
+
+def test_heatmap_counts_all_detections(
+    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex
+) -> None:
+    heatmap(
+        df_ann1_lbl1,
+        ax,
+        bin_size=frequencies.to_offset("1D"),
+        time_range=time_range,
+        coordinates=(0, 0),
+    )
+
+    mat = ax.images[0].get_array()
+    assert mat.shape == (24, len(time_range) - 1)
+    assert mat.sum() == len(df_ann1_lbl1)
+    assert ax.get_ylabel() == "Hour of day"
+    assert ax.get_xlabel() == "Time (1D bin)"
+
+
+# %% timeline
+
+
+def test_timeline_one_scatter_per_label(ax: Axes, sample_df: DataFrame) -> None:
+    df = sample_df[
+        (sample_df["annotator"] == "ann5") & (sample_df["label"].isin(["lbl1", "lbl2"]))
+    ]
+
+    timeline(df, ax)
+
+    assert len(ax.collections) == 2  # ruff: ignore[magic-value-comparison]
+    assert [t.get_text() for t in ax.get_yticklabels()] == ["lbl2", "lbl1"]
+    assert ax.get_xlabel() == "Date"
+
+
+def test_timeline_custom_colors(ax: Axes, sample_df: DataFrame) -> None:
+    df = sample_df[
+        (sample_df["annotator"] == "ann5") & (sample_df["label"].isin(["lbl1", "lbl2"]))
+    ]
+
+    timeline(df, ax, color=["red", "blue"])
+
+    assert ax.collections[0].get_facecolor()[0].tolist() == list(to_rgba("red"))
+    assert ax.collections[1].get_facecolor()[0].tolist() == list(to_rgba("blue"))
