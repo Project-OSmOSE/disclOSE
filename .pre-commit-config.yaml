@@ -16,3 +16,12 @@ repos:
             - --select=E4,E7,E9,F
     # Run the formatter.
     -   id: ruff-format
+-   repo: local
+    hooks:
+    -   id: pytest
+        name: pytest
+        entry: pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
