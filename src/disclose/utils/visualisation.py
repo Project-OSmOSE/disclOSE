@@ -20,15 +20,14 @@ from pandas import (
     Timedelta,
     Timestamp,
     concat,
-    date_range,
     crosstab,
+    date_range,
 )
 from pandas.tseries import frequencies
 from scipy.stats import pearsonr
 
 from disclose.utils.core import (
     add_season_period,
-    get_coordinates,
     get_labels_and_annotators,
     get_sun_times,
     get_time_range_and_bin_size,
@@ -55,16 +54,11 @@ default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
 def histo(
     df: DataFrame,
-    ax: plt.Axes,
+    ax: Axes,
     bin_size: Timedelta | BaseOffset,
     time_bin: Timedelta,
-    **kwargs: bool
-    | str
-    | list[str]
-    | tuple[float, float]
-    | list[Timestamp]
-    | RecordingPeriod,  # noqa: E501
-) -> None:
+    **plot_kwargs: Any,
+) -> Axes:
     """Seasonality plot.
 
     Parameters
@@ -77,7 +71,7 @@ def histo(
         The size of the histogram bins.
     time_bin: Timedelta
         The size of detections.
-    **kwargs: Additional keyword arguments depending on the mode.
+    **plot_kwargs: Additional keyword arguments depending on the mode.
         - legend: bool
             Whether to show the legend.
         - color: str | list[str]
@@ -103,17 +97,17 @@ def histo(
             f" do not contains enough detections."
         )
         logging.warning(msg)
-        return
+        return None
 
-    legend = kwargs.get("legend", False)
-    color = kwargs.get("color", False)
-    season = kwargs.get("season", False)
-    effort = kwargs.get("effort", None)
-    lat, lon = kwargs.get("coordinates")
+    legend = plot_kwargs.get("legend", False)
+    color = plot_kwargs.get("color")
+    season = plot_kwargs.get("season", False)
+    effort = plot_kwargs.get("effort")
+    lat, _ = plot_kwargs.get("coordinates")
 
     bin_size_str = get_bin_size_str(bin_size)
 
-    begin, end, bin_size = round_begin_end_timestamps(list(df.index), bin_size)
+    _, _, bin_size = round_begin_end_timestamps(list(df.index), bin_size)
 
     color = [color] if color is not None else get_colors(df)
 
@@ -160,9 +154,19 @@ def histo(
         )
 
     if season:
-        if lat is None:
-            lat, _ = get_coordinates()
         add_season_period(ax, northern=lat >= 0)
+
+    ax.grid(
+        axis="y",
+        linestyle="--",
+        linewidth=0.5,
+        alpha=0.5,
+        zorder=0,
+    )
+    ax.set_axisbelow(True)
+    ax.figure.tight_layout()
+
+    return ax
 
 
 def arc(ax: Axes, h0: float, h1: float, color: str, thickness: float = 0.025) -> None:
@@ -181,9 +185,7 @@ def arc(ax: Axes, h0: float, h1: float, color: str, thickness: float = 0.025) ->
 def polar(
     df: DataFrame,
     ax: Axes | None = None,
-    show_rise_set: bool = False,
-    coordinates: tuple[float | int | None, float | int | None] | None = None,
-    **kwargs: Any,
+    **plot_kwargs: Any,
 ) -> tuple[Axes, Series]:
     """Plot the mean proportion of detected bins per hour of day on a polar axis.
 
@@ -193,12 +195,12 @@ def polar(
         Detections, with `start_datetime` and `end_datetime` columns.
     ax: Axes
         Polar axes to draw on. A square figure is created if None.
-    show_rise_set: bool
-        If True, draw a day/night band on the outer edge: blue is night,
-        yellow is day, grey is the sunrise/sunset range over the period.
-    coordinates: tuple[float|int, float|int]
-        (latitude, longitude), required if `show_rise_set` is True.
-    **kwargs
+    **plot_kwargs
+        show_rise_set: bool
+            If True, draw a day/night band on the outer edge: blue is night,
+            yellow is day, grey is the sunrise/sunset range over the period.
+        coordinates: tuple[float|int, float|int]
+            (latitude, longitude), required if `show_rise_set` is True.
         Forwarded to `ax.bar` (e.g. color, alpha, edgecolor).
 
     Returns
@@ -206,13 +208,15 @@ def polar(
     The axes and the mean proportion of detections for each hour of the day.
 
     """
-    kwargs.pop("bin_size", None)
-    if show_rise_set and coordinates is None:
-        msg = "`coordinates` is required when show_rise_set=True"
+    if ax.name != "polar":
+        msg = "Provided ax must have a polar projection."
         raise ValueError(msg)
 
-    kwargs.setdefault("alpha", 1)
-    kwargs.setdefault("zorder", 3)
+    plot_kwargs.setdefault("alpha", 1)
+    plot_kwargs.setdefault("zorder", 3)
+
+    show_rise_set = plot_kwargs.pop("show_rise_set", None)
+    coordinates = plot_kwargs.pop("coordinates", None)
 
     label = get_labels(df)
     bin_size = get_max_time(df)
@@ -222,7 +226,7 @@ def polar(
     # Detections per day and hour, with empty days and hours filled with zeros
     all_days = date_range(min(day), max(day), freq="D").date
     counts = crosstab(day, hour).reindex(
-        index=all_days, columns=range(24), fill_value=0
+        index=all_days, columns=range(24), fill_value=0,
     )
 
     # Proportion of bins with a detection per hour, averaged over days
@@ -236,7 +240,7 @@ def polar(
         2 * np.pi * (mean_prop.index.values + 0.5) / 24,
         mean_prop.values,
         width=2 * np.pi / 24 * 0.9,
-        **kwargs,
+        **plot_kwargs,
     )
     ax.set_ylim(0, 1)
     ax.set_theta_zero_location("N")
@@ -248,6 +252,9 @@ def polar(
     ax.set_title(f"{label}  ({n_days} day{'s' if n_days > 1 else ''})")
 
     if show_rise_set:
+        if not coordinates:
+            msg = "`coordinates` is required to show night/day periods"
+            raise ValueError(msg)
         sunrise, sunset = get_sun_times(
             min(df["start_datetime"]),
             max(df["end_datetime"]),
@@ -263,6 +270,7 @@ def polar(
         arc(ax, ss_max, 24, "tab:blue")  # night
 
     return ax, mean_prop
+
 
 def _prepare_timeline_plot(
     df: DataFrame,
@@ -291,7 +299,8 @@ def _prepare_timeline_plot(
     """
     lat, lon = coordinates
     if lat is None or lon is None:
-        lat, lon = get_coordinates()
+        msg = "``lat` and `lon` coordinates must be provided"
+        raise ValueError(msg)
 
     begin = bins[0]
     end = bins[-1]
@@ -384,10 +393,16 @@ def scatter(
         framealpha=0.6,
     )
 
+    _, bin_size_dt = get_time_range_and_bin_size(list(time_range), time_range.freq)
+    if coordinates and season:
+        lat, _ = coordinates
+        add_season_period(ax, northern=lat >= 0, bin_size=bin_size_dt)
+
     if effort:
         shade_no_effort(
             ax=ax,
             observed=effort,
+            legend=True,
         )
 
 
@@ -397,7 +412,7 @@ def heatmap(
     bin_size: Timedelta | BaseOffset,
     time_range: DatetimeIndex,
     **kwargs: bool | tuple[float, float],
-) -> None:
+) -> Axes:
     """Heatmap of detections for a given annotator and label.
 
     Parameters
@@ -430,6 +445,7 @@ def heatmap(
     show_rise_set = kwargs.get("show_rise_set", False)
     season = kwargs.get("season", False)
     coordinates = kwargs.get("coordinates", False)
+    effort = kwargs.get("effort")
 
     begin = time_range[0]
     end = time_range[-1]
@@ -475,7 +491,7 @@ def heatmap(
 
     if coordinates and season:
         lat, _ = coordinates
-        add_season_period(ax, northern=lat >= 0)
+        add_season_period(ax, bin_size=bin_size_dt, northern=lat >= 0)
 
     bin_size_str = get_bin_size_str(bin_size)
     freq_str = get_bin_size_str(freq)
@@ -485,6 +501,17 @@ def heatmap(
     cbar.ax.set_ylabel(f"{freq_str} detections per hour")
     ax.set_ylabel("Hour of day")
     ax.set_xlabel(f"Time ({bin_size_str} bin)")
+
+    if effort:
+        shade_no_effort(
+            ax=ax,
+            observed=effort,
+            legend=True,
+            alpha=0.9,
+            facecolor=0.9,
+        )
+
+    return ax
 
 
 def overview(df: DataFrame, annotator: str | list[str]) -> None:
@@ -501,13 +528,13 @@ def overview(df: DataFrame, annotator: str | list[str]) -> None:
     df = filter_by_annotator(df, annotator)
 
     summary_label = (
-        df.groupby("label")["annotator"]  # noqa: PD010
+        df.groupby("label")["annotator"]  # ruff: ignore[pandas-use-of-dot-pivot-or-unstack]
         .apply(Counter)
         .unstack(fill_value=0)
     )
 
     summary_annotator = (
-        df.groupby("annotator")["label"]  # noqa: PD010
+        df.groupby("annotator")["label"]  # ruff: ignore[pandas-use-of-dot-pivot-or-unstack]
         .apply(Counter)
         .unstack(fill_value=0)
     )
@@ -577,7 +604,6 @@ def _wrap_xtick_labels(ax: plt.Axes, max_chars: int = 10) -> None:
 
 def plot_annotator_agreement(
     df: DataFrame,
-    bin_size: Timedelta | BaseOffset,
     ax: Axes,
 ) -> None:
     """Plot inter-annotator agreement with linear regression.
@@ -654,16 +680,16 @@ def plot_annotator_agreement(
 
 def timeline(
     df: DataFrame,
-    ax: plt.Axes,
+    ax: Axes,
     **kwargs: list[str],
-) -> None:
+) -> Axes:
     """Plot detections on a timeline.
 
     Parameters
     ----------
     df: DataFrame
         APLOSE DataFrame
-    ax : matplotlib.axes.Axes
+    ax : Axes
         Matplotlib axes object where the scatterplot and regression line will be drawn.
     **kwargs: Additional keyword arguments depending on the mode.
         - color: str | list[str]
@@ -672,6 +698,9 @@ def timeline(
 
     """
     color = kwargs.get("color")
+    effort = kwargs.get("effort")
+    season = kwargs.get("season")
+    lat, _ = kwargs.get("coordinates") or (None, None)
 
     labels, _ = get_labels_and_annotators(df)
 
@@ -687,10 +716,17 @@ def timeline(
     ax.set_yticks(np.arange(0, len(labels), 1))
     ax.set_yticklabels(labels[::-1])
     ax.set_xlabel("Date")
-    ax.set_xlim(
-        df["start_datetime"].min().floor("1D"),
-        df["end_datetime"].max().ceil("1D"),
-    )
+
+    if effort:
+        shade_no_effort(
+            ax=ax,
+            observed=effort,
+        )
+
+    if season:
+        add_season_period(ax, northern=lat >= 0)
+
+    return ax
 
 
 def get_colors(df: DataFrame) -> list[str]:
@@ -709,11 +745,10 @@ def get_legend(annotators: str | list[str], labels: str | list[str]) -> list[str
 
 def get_bin_size_str(bin_size: Timedelta | BaseOffset) -> str:
     """Return the bin size as a string."""
-    return (
-        timedelta_to_str(bin_size)
-        if isinstance(bin_size, Timedelta)
-        else bin_size.freqstr
-    )
+    if isinstance(bin_size, Timedelta):
+        return timedelta_to_str(bin_size)
+
+    return f"{bin_size.n}{bin_size.rule_code}"
 
 
 def set_y_axis_to_percentage(ax: plt.Axes, max_val: float) -> None:
@@ -728,7 +763,7 @@ def set_y_axis_to_percentage(ax: plt.Axes, max_val: float) -> None:
 
 
 def set_dynamic_ylim(
-    ax: plt.Axes,
+    ax: Axes,
     df: DataFrame,
     padding: float = 0.05,
     nticks: int = 4,
@@ -742,16 +777,17 @@ def set_dynamic_ylim(
     ax.set_yticks(range(0, upper_lim + 1, step))
 
 
-def set_plot_title(ax: plt.Axes, annotators: list[str], labels: list[str]) -> None:
+def set_plot_title(ax: Axes, annotators: list[str], labels: list[str]) -> None:
     """Set plot title."""
     title = f"annotator: {', '.join(set(annotators))}\nlabel: {', '.join(set(labels))}"
     ax.set_title(title)
 
 
 def shade_no_effort(
-    ax: plt.Axes,
+    ax: Axes,
     observed: RecordingPeriod,
-    legend: bool,
+    legend: bool = True,
+    **kwargs: Any,
 ) -> None:
     """Shade areas of the plot where no observation effort was made.
 
@@ -788,22 +824,26 @@ def shade_no_effort(
     # Get legend handle
     handles1, labels1 = ax.get_legend_handles_labels()
 
+    kwargs.setdefault("alpha", 0.1)
+    kwargs.setdefault("facecolor", 0.65)
+    facecolor = kwargs.pop("facecolor")
+
     _draw_effort_spans(
         ax=ax,
         effort_index=partial_effort.index,
         width_days=width_days,
-        facecolor="0.65",
-        alpha=0.1,
+        facecolor=str(facecolor),
         label="partial data",
+        **kwargs,
     )
 
     _draw_effort_spans(
         ax=ax,
         effort_index=no_effort.index,
         width_days=width_days,
-        facecolor="0.45",
-        alpha=0.15,
+        facecolor=str(0.7 * facecolor),
         label="no data",
+        **kwargs,
     )
 
     # Add effort legend to current plot legend

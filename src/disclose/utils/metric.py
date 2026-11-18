@@ -120,7 +120,7 @@ def _prepare_annotator_vectors(
     """
     annotators = get_annotators(df)
     annotators = [annotators] if isinstance(annotators, str) else annotators
-    if len(annotators) != 2:  # noqa: PLR2004
+    if len(annotators) != 2:  # ruff: ignore[magic-value-comparison]
         msg = f"Two annotators needed, DataFrame contains {len(annotators)} annotators"
         raise ValueError(msg)
 
@@ -136,7 +136,7 @@ def _prepare_annotator_vectors(
     annotator2 = next(ant for ant in annotators if ant != annotator1)
     label2 = (
         next(lbl for lbl in labels if lbl != label1)
-        if len(labels) == 2  # noqa: PLR2004
+        if len(labels) == 2  # ruff: ignore[magic-value-comparison]
         else label1
     )
     vec2 = df_count[f"{label2}-{annotator2}"]

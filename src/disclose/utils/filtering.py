@@ -13,15 +13,15 @@ from osekit.config import TIMESTAMP_FORMAT_AUDIO_FILE
 from osekit.utils.timestamp import strftime_osmose_format, strptime_from_text
 from pandas import (
     DataFrame,
+    Index,
     Timedelta,
     Timestamp,
     concat,
     read_csv,
     to_datetime,
-    Index,
 )
 
-from disclose.utils.core import get_count, build_time_vector
+from disclose.utils.core import build_time_vector, get_count
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -281,7 +281,7 @@ def read_dataframe(file: Path, rows: int | None = None) -> DataFrame:
             "annotation": "label",
             "is_box": "type",
             "score": "confidence",
-        }
+        },
     )
 
     return (
@@ -315,7 +315,7 @@ def get_max_freq(df: DataFrame) -> float:
     return df["max_frequency"].max()
 
 
-def get_max_time(df: DataFrame) -> None | Timedelta:
+def get_max_time(df: DataFrame) -> Timedelta | None:
     """Return the maximum time of APLOSE DataFrame."""
     if df.empty:
         return None
@@ -776,7 +776,7 @@ def add_weak_detection(
 
 
 def intersection_or_union(
-    df: DataFrame, user_sel: str, effort: Any | None = None
+    df: DataFrame, user_sel: str, effort: Any | None = None,
 ) -> DataFrame:
     """Compute intersection or union of detections from multiple annotators."""
     annotators = get_annotators(df)
@@ -810,9 +810,9 @@ def intersection_or_union(
         mask = (df_count > 0).all(axis=1)
     else:
         # Keep only time bins where AT LEAST ONE annotator detected something
-        annotator_name = " ∪ ".join(annotators)  # noqa: RUF001
-        dataset_name = " ∪ ".join(datasets)  # noqa: RUF001
-        label_name = " ∪ ".join(labels)  # noqa: RUF001
+        annotator_name = " ∪ ".join(annotators)  # ruff: ignore[ambiguous-unicode-character-string]
+        dataset_name = " ∪ ".join(datasets)  # ruff: ignore[ambiguous-unicode-character-string]
+        label_name = " ∪ ".join(labels)  # ruff: ignore[ambiguous-unicode-character-string]
         mask = (df_count > 0).any(axis=1)
 
     # Get the selected timestamps

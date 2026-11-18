@@ -11,14 +11,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pandas import (
+    DataFrame,
     IntervalIndex,
     Series,
     Timedelta,
+    concat,
     date_range,
     read_csv,
     to_datetime,
-    DataFrame,
-    concat,
 )
 
 from disclose.dataclass.data_aplose_config import DataAploseConfig
@@ -86,7 +86,7 @@ class RecordingPeriod:
         ].max(axis=1)
 
         df["effective_end_recording"] = df[["end_recording", "end_deployment"]].min(
-            axis=1
+            axis=1,
         )
 
         # Build fine-grained timeline at `timebin_origin` resolution
@@ -180,7 +180,7 @@ class RecordingPeriod:
                     ],
                     "start_deployment": datum["deployment_date"],
                     "end_deployment": datum["recovery_date"],
-                })
+                }),
             )
 
         return DataFrame(series_list)

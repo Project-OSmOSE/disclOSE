@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from pandas import Timedelta, read_csv, to_datetime, DataFrame, Timestamp, IntervalIndex
+from pandas import DataFrame, IntervalIndex, Timedelta, Timestamp, read_csv, to_datetime
 
 from disclose.dataclass.data_aplose_config import DataAploseConfig
 from disclose.dataclass.recording_period import RecordingPeriod
@@ -56,7 +56,7 @@ def test_recording_period_with_gaps(
         df_planning[col] = to_datetime(df_planning[col], utc=True)
 
     df_planning["start"] = df_planning[["start_recording", "start_deployment"]].max(
-        axis=1
+        axis=1,
     )
     df_planning["end"] = df_planning[["end_recording", "end_deployment"]].min(axis=1)
 
@@ -87,7 +87,7 @@ def test_recording_period_with_gaps(
 
 
 def test_no_recording_file_provided(
-    sample_csv_result: DataFrame, recording_planning_csv: DataFrame
+    sample_csv_result: DataFrame, recording_planning_csv: DataFrame,
 ) -> None:
     dict_test = {
         "detection_file": sample_csv_result,
@@ -101,7 +101,7 @@ def test_no_recording_file_provided(
 
 
 def test_no_recording_wrong_file(
-    sample_csv_result: DataFrame, recording_planning_csv: DataFrame
+    sample_csv_result: DataFrame, recording_planning_csv: DataFrame,
 ) -> None:
     dict_test = {
         "detection_file": sample_csv_result,
@@ -125,9 +125,9 @@ def test_from_json(tmp_path: Path):
                 {
                     "record_start_date": "2025-01-01T00:00:00Z",
                     "record_end_date": "2025-01-01T01:00:00Z",
-                }
+                },
             ],
-        }
+        },
     ]
 
     json_file.write_text(json.dumps(data))
@@ -139,7 +139,7 @@ def test_from_json(tmp_path: Path):
             "end_recording": "2025-01-01T01:00:00Z",
             "start_deployment": "2025-01-01T00:00:00Z",
             "end_deployment": "2025-01-02T00:00:00Z",
-        }
+        },
     ])
 
     assert df.equals(expected)
@@ -175,7 +175,7 @@ def test_recording_period_from_csv_missing_column(
             [
                 Timestamp("2025-01-01T00:00:00+0000"),
                 Timestamp("2026-01-01T00:00:00+0000"),
-            ]
+            ],
         ],
         columns=["start_recording", "end_recording"],
     )
@@ -186,7 +186,7 @@ def test_recording_period_from_csv_missing_column(
 
 
 def test_recording_from_config_empty_file(
-    tmp_path: Path, sample_csv_result: DataFrame, recording_planning_csv: DataFrame
+    tmp_path: Path, sample_csv_result: DataFrame, recording_planning_csv: DataFrame,
 ) -> None:
     empty_file = tmp_path / "recordings.csv"
     data = DataFrame(

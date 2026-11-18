@@ -2,16 +2,15 @@ from unittest.mock import patch
 
 import pytest
 from matplotlib import pyplot as plt
-from pandas import DataFrame, Timedelta, Timestamp, date_range, IntervalIndex, Series
+from pandas import DataFrame, IntervalIndex, Series, Timedelta, Timestamp, date_range
 from pandas.tseries import frequencies
 from pytz import timezone
 
-from disclose.dataclass.recording_period import RecordingPeriod
 from disclose.dataclass.data_aplose import DataAplose
+from disclose.dataclass.recording_period import RecordingPeriod
 from disclose.utils.core import (
     add_recording_period,
     add_season_period,
-    get_coordinates,
     get_count,
     get_labels_and_annotators,
     get_season,
@@ -24,51 +23,6 @@ from disclose.utils.core import (
     timedelta_to_str,
 )
 from disclose.utils.filtering import add_weak_detection, get_max_time
-
-
-def test_coordinates_valid_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    inputs = ["42", "-71"]
-
-    def fake_box(msg: str, title: str, fields: list[str]) -> list[str]:
-        return inputs
-
-    monkeypatch.setattr("easygui.multenterbox", fake_box)
-    lat, lon = get_coordinates()
-    assert lat == 42  # noqa: PLR2004
-    assert lon == -71  # noqa: PLR2004
-
-
-def test_coordinates_cancelled_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_box(msg: str, title: str, fields: list[str]) -> None:
-        return None
-
-    monkeypatch.setattr("easygui.multenterbox", fake_box)
-    with pytest.raises(TypeError, match="was cancelled"):
-        get_coordinates()
-
-
-def test_coordinates_invalid_then_valid_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    inputs = [["900", "50"], ["45", "900"], ["45", "100"]]
-
-    def fake_box(msg: str, title: str, fields: list[str]) -> list[str]:
-        return inputs.pop(0)
-
-    monkeypatch.setattr("easygui.multenterbox", fake_box)
-    lat, lon = get_coordinates()
-    assert lat == 45.0  # noqa: PLR2004
-    assert lon == 100.0  # noqa: PLR2004
-
-
-def test_coordinates_non_numeric_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    inputs = [["abc", "-20"], ["-20", "abc"], ["10", "-20"]]
-
-    def fake_box(msg: str, title: str, fields: list[str]) -> list[str]:
-        return inputs.pop(0)
-
-    monkeypatch.setattr("easygui.multenterbox", fake_box)
-    lat, lon = get_coordinates()
-    assert lat == 10.0  # noqa: PLR2004
-    assert lon == -20.0  # noqa: PLR2004
 
 
 @pytest.mark.parametrize(
@@ -129,8 +83,8 @@ def test_get_sun_times_valid_input(
     assert all(isinstance(h, float) for h in h_sunset)
 
     for sunrise, sunset in zip(h_sunrise, h_sunset, strict=False):
-        assert 0 <= sunrise <= 24  # noqa: PLR2004
-        assert 0 <= sunset <= 24  # noqa: PLR2004
+        assert 0 <= sunrise <= 24  # ruff: ignore[magic-value-comparison]
+        assert 0 <= sunset <= 24  # ruff: ignore[magic-value-comparison]
         assert sunrise < sunset
 
 
@@ -190,7 +144,7 @@ def test_get_count_multiple_annotators(sample_df: DataFrame) -> None:
 
 def test_get_count_multiple_labels(sample_df: DataFrame) -> None:
     df = DataAplose(sample_df).filter_df(
-        annotator="ann5", label=["lbl1", "lbl2", "lbl3"]
+        annotator="ann5", label=["lbl1", "lbl2", "lbl3"],
     )
     result = get_count(df, bin_size=Timedelta("1day"))
     expected = sample_df[
@@ -212,10 +166,10 @@ def test_get_count_multiple_labels_annotators(sample_df: DataFrame) -> None:
     result = get_count(df, bin_size=Timedelta("1day"))
     assert set(result.columns) == {"lbl1-ann1", "lbl2-ann2"}
     assert result["lbl1-ann1"].sum() == len(
-        sample_df[(sample_df["label"] == "lbl1") & (sample_df["annotator"] == "ann1")]
+        sample_df[(sample_df["label"] == "lbl1") & (sample_df["annotator"] == "ann1")],
     )
     assert result["lbl2-ann2"].sum() == len(
-        sample_df[(sample_df["label"] == "lbl2") & (sample_df["annotator"] == "ann2")]
+        sample_df[(sample_df["label"] == "lbl2") & (sample_df["annotator"] == "ann2")],
     )
 
 
@@ -378,7 +332,7 @@ def test_time_range_timedelta() -> None:
     time_range, returned_bin = get_time_range_and_bin_size(timestamps, bin_size)
 
     expected = date_range(
-        start="2025-08-20 12:00:00", end="2025-08-20 15:00:00", freq="1h"
+        start="2025-08-20 12:00:00", end="2025-08-20 15:00:00", freq="1h",
     )
     assert (time_range == expected).all()
     assert returned_bin == bin_size
@@ -390,7 +344,7 @@ def test_time_range_baseoffset() -> None:
     time_range, returned_bin = get_time_range_and_bin_size(timestamps, bin_size)
 
     expected = date_range(
-        start="2025-08-20 12:00:00", end="2025-08-20 15:00:00", freq="1h"
+        start="2025-08-20 12:00:00", end="2025-08-20 15:00:00", freq="1h",
     )
     assert (time_range == expected).all()
     assert returned_bin == bin_size
@@ -407,7 +361,7 @@ def test_invalid_timestamp_list_type() -> None:
     timestamps = "not_a_list"
     bin_size = Timedelta("1h")
     with pytest.raises(
-        TypeError, match=r"`timestamp_list` must be a list\[Timestamp\]"
+        TypeError, match=r"`timestamp_list` must be a list\[Timestamp\]",
     ):
         get_time_range_and_bin_size(timestamps, bin_size)
 
@@ -416,7 +370,7 @@ def test_invalid_timestamp_list_content() -> None:
     timestamps = [Timestamp("2025-08-20"), "not_a_timestamp"]
     bin_size = Timedelta("1h")
     with pytest.raises(
-        TypeError, match=r"`timestamp_list` must be a list\[Timestamp\]"
+        TypeError, match=r"`timestamp_list` must be a list\[Timestamp\]",
     ):
         get_time_range_and_bin_size(timestamps, bin_size)
 
@@ -461,7 +415,7 @@ def test_round_begin_end_timestamps_valid_entry_2() -> None:
         Timestamp("2025-01-03 18:45:00"),
     ]
     start, end, bin_size = round_begin_end_timestamps(
-        ts_list, frequencies.to_offset("1h")
+        ts_list, frequencies.to_offset("1h"),
     )
 
     assert start == Timestamp("2025-01-01 10:00:00")

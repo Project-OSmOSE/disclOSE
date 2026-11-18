@@ -5,8 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 import soundfile as sf
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from osekit.utils.timestamp import strftime_osmose_format
-from pandas import DataFrame, read_csv
+from pandas import DataFrame, DatetimeIndex, date_range, read_csv
 
 from disclose.dataclass.data_aplose import DataAplose
 
@@ -131,8 +133,8 @@ sample_dataset,2025_01_26_06_20_20,FINISHED,FINISHED,FINISHED,FINISHED,FINISHED,
 """
 
 RECORDING_PLANNING_CSV = """start_recording,end_recording,start_deployment,end_deployment
-2024-01-01 00:00:00+0000,2024-04-09 02:00:00+0000,2024-01-02 00:00:00+0000,2024-04-30 02:00:00+0000
-2024-04-30 01:00:00+0000,2024-07-14 06:00:00+0000,2024-04-30 02:00:00+0000,2024-07-06 14:00:00+0000
+2025-01-01 00:00:00+0000,2025-02-01 02:00:00+0000,2025-01-24 00:00:00+0000,2025-01-29 02:00:00+0000
+2025-05-01 01:00:00+0000,2025-07-06 06:00:00+0000,2025-05-01 02:00:00+0000,2025-07-06 04:00:00+0000
 """
 
 
@@ -145,6 +147,21 @@ def sample_df() -> DataFrame:
         "annotator",
         "label",
     ]).reset_index(drop=True)
+
+
+@pytest.fixture
+def df_ann1_lbl1(sample_df: DataFrame) -> DataFrame:
+    """Weak detections of a single annotator/label pair."""
+    return sample_df[
+        (sample_df["annotator"] == "ann1")
+        & (sample_df["label"] == "lbl1")
+        & (sample_df["type"] == "WEAK")
+    ].reset_index(drop=True)
+
+
+@pytest.fixture
+def time_range(df_ann1_lbl1: DataFrame) -> DatetimeIndex:
+    return date_range("2025-01-25", "2025-01-27", freq="D", tz="UTC")
 
 
 @pytest.fixture
@@ -242,3 +259,19 @@ def recording_planning_csv(tmp_path) -> Path:
     path = tmp_path / "recording_planning.csv"
     path.write_text(RECORDING_PLANNING_CSV)
     return path
+
+
+@pytest.fixture
+def ax() -> Axes:
+    """Plain axes, closed after the test."""
+    _, ax = plt.subplots()
+    yield ax
+    plt.close("all")
+
+
+@pytest.fixture
+def polar_ax() -> Axes:
+    """Polar axes, closed after the test."""
+    _, ax = plt.subplots(subplot_kw={"projection": "polar"})
+    yield ax
+    plt.close("all")

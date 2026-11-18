@@ -114,11 +114,11 @@ def test_folder_multiple(pod_dataframe: DataFrame, tmp_path: Path) -> None:
 
 
 def test_folder_single_txt(
-    monkeypatch: pytest.MonkeyPatch, click_dataframe: DataFrame, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, click_dataframe: DataFrame, tmp_path: Path,
 ) -> None:
     """Test processing a single CSV file."""
     monkeypatch.setattr(
-        "disclose.utils.pod.process_feeding_buzz", lambda df, species: df
+        "disclose.utils.pod.process_feeding_buzz", lambda df, species: df,
     )
     txt_file = tmp_path / "click_folder" / "click_dataframe.txt"
     txt_file.parent.mkdir(parents=True, exist_ok=True)
@@ -246,7 +246,7 @@ def test_right_csv_format(
     monkeypatch.setattr(Path, "rglob", lambda self, pattern: [fake_path])
     monkeypatch.setattr("disclose.utils.pod.find_delimiter", lambda f: ";")
     monkeypatch.setattr(
-        "disclose.utils.pod.read_csv", lambda *args, **kwargs: mocked_df
+        "disclose.utils.pod.read_csv", lambda *args, **kwargs: mocked_df,
     )
 
     if should_raise:
