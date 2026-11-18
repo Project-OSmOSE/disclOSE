@@ -24,6 +24,7 @@ from disclose.utils.core import (
 )
 from disclose.utils.filtering import add_weak_detection, get_max_time
 
+
 @pytest.mark.parametrize(
     ("ts", "northern", "expected"),
     [

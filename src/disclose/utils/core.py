@@ -6,7 +6,6 @@ import json
 from typing import TYPE_CHECKING, Any
 
 import astral
-import easygui
 from astral.sun import sunrise, sunset
 from matplotlib.axes import Axes
 from pandas import (

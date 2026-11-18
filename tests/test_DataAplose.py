@@ -14,7 +14,6 @@ from pandas import DataFrame, Timedelta, Timestamp
 from pandas.tseries import frequencies
 
 from disclose.dataclass.data_aplose import DataAplose, _get_locator_from_offset
-from disclose.dataclass.data_aplose_config import DataAploseConfig
 from disclose.utils.filtering import get_timezone
 
 

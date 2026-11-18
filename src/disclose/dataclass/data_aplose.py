@@ -35,8 +35,9 @@ from disclose.utils.filtering import (
     get_annotators,
     get_dataset,
     get_labels,
+    get_max_time,
     get_timezone,
-    load_detections, get_max_time,
+    load_detections,
 )
 from disclose.utils.metric import detection_perf
 from disclose.utils.visualisation import (

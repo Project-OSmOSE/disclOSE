@@ -5,10 +5,15 @@ import pytest
 import pytz
 from matplotlib.axes import Axes
 from matplotlib.colors import to_rgba
-from pandas import DataFrame, DatetimeIndex, Timedelta, Timestamp, date_range, to_datetime
+from pandas import (
+    DataFrame,
+    DatetimeIndex,
+    Timedelta,
+    Timestamp,
+    date_range,
+)
 from pandas.tseries import frequencies
 
-from disclose.utils.filtering import get_timezone
 from disclose.utils.visualisation import (
     _prepare_timeline_plot,
     _wrap_xtick_labels,
@@ -20,7 +25,7 @@ from disclose.utils.visualisation import (
     polar,
     scatter,
     set_y_axis_to_percentage,
-    timeline, add_sunrise_sunset,
+    timeline,
 )
 
 
@@ -118,6 +123,7 @@ def test_lists_and_strings_combined():
     assert result == expected
 
 # %% polar plot
+
 
 @pytest.mark.parametrize(
     ("h0", "h1"),
@@ -330,6 +336,7 @@ def test_prepare_timeline_plot_axes(
     assert ax.get_ylabel() == "Hour"
     assert ax.get_title() == "annotator: ann1\nlabel: lbl1"
 
+
 def test_prepare_timeline_plot_rise_set(
     monkeypatch: pytest.MonkeyPatch,
     ax: Axes,
@@ -449,6 +456,7 @@ def test_timeline_custom_colors(ax: Axes, sample_df: DataFrame) -> None:
     assert ax.collections[1].get_facecolor()[0].tolist() == list(to_rgba("blue"))
 
 # %% add_sunrise_sunset
+
 
 def test_add_sunrise_sunset(sample_df: DataFrame):
     fig, ax = plt.subplots()
