@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections import Counter
 from itertools import cycle
 from typing import TYPE_CHECKING, Any
 
@@ -109,35 +108,39 @@ def histo(
 
     _, _, bin_size = round_begin_end_timestamps(list(df.index), bin_size)
 
-    color = [color] if color is not None else get_colors(df)
+    n_groups = len(df.columns)
 
-    if len(df.columns) > 1 and legend:
-        legend_labels = get_legend(labels, annotators)
+    if color is None:
+        colors = get_colors(df)
+    elif isinstance(color, str):
+        colors = [color] * n_groups
     else:
-        legend_labels = None
+        colors = list(color)
 
-    n_groups = len(labels) if legend_labels else 1
+    if len(colors) != n_groups:
+        msg = f"Expected {n_groups} colors, got {len(colors)}."
+        raise ValueError(msg)
+
+    legend_labels = get_legend(labels, annotators) if legend and n_groups > 1 else None
+
     bar_width = bin_size / n_groups
+    bar_width_days = bar_width.total_seconds() / 86400
     bin_starts = mdates.date2num(df.index)
 
     for i in range(n_groups):
-        offset = i * bar_width.total_seconds() / 86400
+        ax.bar(
+            bin_starts + i * bar_width_days,
+            df.iloc[:, i],
+            width=bar_width_days,
+            align="edge",
+            edgecolor="black",
+            color=colors[i],
+            label=legend_labels[i] if legend_labels else None,
+            zorder=2,
+        )
 
-        bar_kwargs = {
-            "width": (bar_width.total_seconds() / 86400),
-            "align": "edge",
-            "edgecolor": "black",
-            "color": color[i],
-            "zorder": 2,
-        }
-        if legend_labels:
-            bar_kwargs["label"] = legend_labels[i]
-
-        ax.bar(bin_starts + offset, df.iloc[:, i], **bar_kwargs)
-
-    if len(df.columns) > 1 and legend:
+    if legend_labels:
         ax.legend(
-            labels=legend_labels,
             bbox_to_anchor=(1.01, 1),
             loc="upper left",
         )
@@ -226,7 +229,9 @@ def polar(
     # Detections per day and hour, with empty days and hours filled with zeros
     all_days = date_range(min(day), max(day), freq="D").date
     counts = crosstab(day, hour).reindex(
-        index=all_days, columns=range(24), fill_value=0,
+        index=all_days,
+        columns=range(24),
+        fill_value=0,
     )
 
     # Proportion of bins with a detection per hour, averaged over days
@@ -514,7 +519,7 @@ def heatmap(
     return ax
 
 
-def overview(df: DataFrame, annotator: str | list[str]) -> None:
+def overview(df: DataFrame, annotator: str | list[str]) -> DataFrame:
     """Overview of an APLOSE formatted DataFrame.
 
     Parameters
@@ -527,85 +532,19 @@ def overview(df: DataFrame, annotator: str | list[str]) -> None:
     """
     df = filter_by_annotator(df, annotator)
 
-    summary_label = (
-        df.groupby("label")["annotator"]  # ruff: ignore[pandas-use-of-dot-pivot-or-unstack]
-        .apply(Counter)
-        .unstack(fill_value=0)
+    return df.pivot_table(
+        index="label",
+        columns="annotator",
+        values="start_datetime",
+        aggfunc="count",
+        fill_value=0,
     )
-
-    summary_annotator = (
-        df.groupby("annotator")["label"]  # ruff: ignore[pandas-use-of-dot-pivot-or-unstack]
-        .apply(Counter)
-        .unstack(fill_value=0)
-    )
-
-    dataset = df["dataset"].iloc[0]
-
-    fig, axs = plt.subplots(2, 1)
-    axs[0] = summary_label.plot(
-        kind="bar",
-        ax=axs[0],
-        edgecolor="black",
-        linewidth=0.5,
-    )
-    axs[1] = summary_annotator.plot(
-        kind="bar",
-        ax=axs[1],
-        edgecolor="black",
-        linewidth=0.5,
-    )
-
-    for a in axs:
-        a.legend(
-            loc="center left",
-            frameon=1,
-            framealpha=0.6,
-            bbox_to_anchor=(1.01, 0.5),
-        )
-        a.tick_params(axis="both", rotation=0)
-        a.set_ylabel("Number of annotated calls")
-        a.yaxis.grid(color="gray", linestyle="--")
-        a.set_axisbelow(True)
-
-    # labels
-    _wrap_xtick_labels(axs[0], max_chars=10)
-    axs[1].set_xlabel("Annotator")
-
-    # titles
-    axs[0].set_title("Number of detections per label")
-    axs[1].set_title("Number of detections per annotator")
-    fig.suptitle(f"{dataset}")
-
-    plt.tight_layout()
-
-    # log
-    msg = f"""{" Overview ":#^40}"""
-    msg += f"\n\n {summary_label}"
-    logging.info(msg)
-
-
-def _wrap_xtick_labels(ax: plt.Axes, max_chars: int = 10) -> None:
-    """Wrap x-axis tick labels at max_chars per line."""
-
-    def wrap_text(text: str) -> str:
-        lines = []
-        while len(text) > max_chars:
-            break_index = text.rfind(" ", 0, max_chars + 1)
-            if break_index == -1:
-                break_index = max_chars  # force break
-            lines.append(text[:break_index])
-            text = text[break_index:].lstrip()
-        lines.append(text)  # remaining part
-        return "\n".join(lines)
-
-    new_labels = [wrap_text(label.get_text()) for label in ax.get_xticklabels()]
-    ax.set_xticklabels(new_labels, rotation=0)
 
 
 def plot_annotator_agreement(
     df: DataFrame,
     ax: Axes,
-) -> None:
+) -> Axes:
     """Plot inter-annotator agreement with linear regression.
 
     Creates a scatter plot comparing detection counts between two annotators
@@ -616,8 +555,6 @@ def plot_annotator_agreement(
     ----------
     df : DataFrame
         APLOSE-formatted DataFrame containing labels from exactly two annotators.
-    bin_size : Timedelta | BaseOffset
-        Size of each time bin for aggregating label timestamps.
     ax : plt.Axes
         Matplotlib axes object where the scatter plot and regression line will be drawn.
 
@@ -676,6 +613,8 @@ def plot_annotator_agreement(
         framealpha=1,
         fontsize=8,
     )
+
+    return ax
 
 
 def timeline(
