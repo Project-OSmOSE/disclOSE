@@ -16,7 +16,6 @@ from pandas.tseries import frequencies
 
 from disclose.utils.visualisation import (
     _prepare_timeline_plot,
-    _wrap_xtick_labels,
     arc,
     get_legend,
     heatmap,
@@ -29,50 +28,22 @@ from disclose.utils.visualisation import (
 )
 
 
-def test_overview_runs_without_error(sample_df) -> None:
-    try:
-        overview(sample_df, sorted(set(sample_df["annotator"])))
-    except ValueError:
-        pytest.fail("test_detection_perf raised ValueError unexpectedly.")
+def test_overview(sample_df: DataFrame) -> None:
+    expected = (
+        DataFrame(
+            {
+                "annotator": ["ann1", "ann2", "ann3", "ann4", "ann5", "ann6"],
+                "lbl1": [7, 7, 0, 0, 14, 2],
+                "lbl2": [17, 15, 14, 11, 11, 7],
+                "lbl3": [0, 0, 0, 0, 2, 0],
+            },
+        )
+        .set_index("annotator")
+        .T
+    )
+    actual = overview(sample_df, sorted(set(sample_df["annotator"])))
 
-
-def test_wrap_xtick_labels_short_labels():
-    fig, ax = plt.subplots()
-    labels = ["A", "B", "C"]
-    ax.set_xticks(range(len(labels)))
-    ax.set_xticklabels(labels)
-
-    _wrap_xtick_labels(ax, max_chars=2)
-
-    wrapped_labels = [label.get_text() for label in ax.get_xticklabels()]
-    assert wrapped_labels == labels
-
-
-def test_wrap_xtick_labels_long_label():
-    fig, ax = plt.subplots()
-    labels = ["This is a long label"]
-    ax.set_xticks([0])
-    ax.set_xticklabels(labels)
-
-    _wrap_xtick_labels(ax, max_chars=5)
-
-    wrapped_labels = [label.get_text() for label in ax.get_xticklabels()]
-    expected = "This\nis a\nlong\nlabel"
-    assert wrapped_labels[0] == expected
-
-
-def test_wrap_xtick_labels_no_spaces():
-    fig, ax = plt.subplots()
-    labels = ["abcdefghijk"]
-    ax.set_xticks([0])
-    ax.set_xticklabels(labels)
-
-    _wrap_xtick_labels(ax, max_chars=4)
-
-    wrapped_labels = [label.get_text() for label in ax.get_xticklabels()]
-
-    expected = "abcd\nefgh\nijk"
-    assert wrapped_labels[0] == expected
+    assert actual.equals(expected)
 
 
 def test_set_y_axis_to_percentage():
@@ -122,6 +93,7 @@ def test_lists_and_strings_combined():
     expected = ["Alice\nLabel1", "Bob\nLabel2"]
     assert result == expected
 
+
 # %% polar plot
 
 
@@ -153,7 +125,8 @@ def test_arc_custom_thickness_and_color(polar_ax: Axes) -> None:
 
 
 def test_polar_returns_axes_and_mean_proportion(
-    sample_df: DataFrame, polar_ax: Axes,
+    sample_df: DataFrame,
+    polar_ax: Axes,
 ) -> None:
     df = sample_df[
         (sample_df["annotator"] == "ann1")
@@ -168,7 +141,9 @@ def test_polar_returns_axes_and_mean_proportion(
 
     bins_per_hour = Timedelta("1h") / Timedelta("10s")  # 360
     expected = np.zeros(24)
-    expected[6] = ((6 + 1) / bins_per_hour) / 2  # mean over 2 days, 6 detections on 25th + 1 on 26th
+    expected[6] = (
+        (6 + 1) / bins_per_hour
+    ) / 2  # mean over 2 days, 6 detections on 25th + 1 on 26th
     assert mean_prop.to_numpy() == pytest.approx(expected)
 
 
@@ -203,7 +178,9 @@ def test_polar_title_plural(sample_df: DataFrame, polar_ax: Axes) -> None:
 
 
 def test_polar_title_single_day(sample_df: DataFrame, polar_ax: Axes) -> None:
-    one_day = sample_df[(sample_df["start_datetime"].dt.day == 25) & (sample_df["label"] == "lbl2")]
+    one_day = sample_df[
+        (sample_df["start_datetime"].dt.day == 25) & (sample_df["label"] == "lbl2")
+    ]
     polar(one_day, ax=polar_ax)
     assert polar_ax.get_title() == "lbl2  (1 day)"
 
@@ -242,7 +219,8 @@ def test_polar_ignores_bin_size_kwarg(sample_df: DataFrame, polar_ax: Axes) -> N
 
 
 def test_polar_rise_set_requires_coordinates(
-    sample_df: DataFrame, polar_ax: Axes,
+    sample_df: DataFrame,
+    polar_ax: Axes,
 ) -> None:
     with pytest.raises(ValueError, match="`coordinates` is required"):
         polar(sample_df, ax=polar_ax, show_rise_set=True)
@@ -270,10 +248,12 @@ def test_polar_rise_set_draws_day_night_arcs(
 
 
 def test_polar_without_rise_set_draws_no_arcs(
-    sample_df: DataFrame, polar_ax: Axes,
+    sample_df: DataFrame,
+    polar_ax: Axes,
 ) -> None:
     polar(sample_df, ax=polar_ax)
     assert len(polar_ax.patches) == 24
+
 
 # %% histo
 
@@ -302,7 +282,9 @@ def test_histo_labels_and_bars(ax: Axes, df_counts: DataFrame) -> None:
 
 
 def test_histo_not_enough_data(
-    ax: Axes, df_counts: DataFrame, caplog: pytest.LogCaptureFixture,
+    ax: Axes,
+    df_counts: DataFrame,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     with caplog.at_level("WARNING"):
         histo(
@@ -319,8 +301,11 @@ def test_histo_not_enough_data(
 
 # %% _prepare_timeline_plot
 
+
 def test_prepare_timeline_plot_axes(
-    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex,
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
 ) -> None:
     _prepare_timeline_plot(
         df_ann1_lbl1,
@@ -395,11 +380,15 @@ def test_prepare_timeline_plot_missing_coordinates(
             coordinates=(None, None),
             show_rise_set=True,
         )
+
+
 # %% scatter
 
 
 def test_scatter_points_and_legend(
-    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex,
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
 ) -> None:
     scatter(df_ann1_lbl1, ax, time_range, coordinates=(0, 0))
 
@@ -413,7 +402,9 @@ def test_scatter_points_and_legend(
 
 
 def test_heatmap_counts_all_detections(
-    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex,
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
 ) -> None:
     heatmap(
         df_ann1_lbl1,
@@ -455,6 +446,7 @@ def test_timeline_custom_colors(ax: Axes, sample_df: DataFrame) -> None:
     assert ax.collections[0].get_facecolor()[0].tolist() == list(to_rgba("red"))
     assert ax.collections[1].get_facecolor()[0].tolist() == list(to_rgba("blue"))
 
+
 # %% add_sunrise_sunset
 
 
@@ -465,7 +457,11 @@ def test_add_sunrise_sunset(sample_df: DataFrame):
         _prepare_timeline_plot(
             df=sample_df,
             ax=ax,
-            bins=date_range(start=min(sample_df["start_datetime"]), end=max(sample_df["end_datetime"]), freq=Timedelta("1min")),
+            bins=date_range(
+                start=min(sample_df["start_datetime"]),
+                end=max(sample_df["end_datetime"]),
+                freq=Timedelta("1min"),
+            ),
             show_rise_set=True,
             coordinates=(40, -4),
         )

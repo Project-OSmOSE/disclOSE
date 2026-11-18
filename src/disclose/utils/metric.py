@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
-from pandas import DataFrame, DatetimeIndex, Series, Timestamp
-
-from disclose.dataclass.recording_period import RecordingPeriod
 from disclose.utils.core import get_count
 from disclose.utils.filtering import (
     get_annotators,
@@ -16,8 +13,15 @@ from disclose.utils.filtering import (
     intersection_or_union,
 )
 
+if TYPE_CHECKING:
+    from pandas import DataFrame, DatetimeIndex, Series, Timestamp
+
+    from disclose.dataclass.recording_period import RecordingPeriod
+
 
 class Classification(TypedDict):
+    """Evaluation results, grouped by outcome type."""
+
     true_positive: list[Timestamp]
     false_positive: list[Timestamp]
     true_negative: list[Timestamp]
@@ -26,6 +30,8 @@ class Classification(TypedDict):
 
 
 class ConfusionMatrix(TypedDict):
+    """Counts of each classification outcome."""
+
     true_positive: int
     false_positive: int
     true_negative: int
@@ -33,7 +39,12 @@ class ConfusionMatrix(TypedDict):
     error: int
 
 
-Scores = tuple[float, float, float]
+class Scores(TypedDict):
+    """Precision, recall, and F-score computed from the confusion matrix."""
+
+    precision: float
+    recall: float
+    f_score: float
 
 
 def _get_classification_timestamps(
@@ -183,7 +194,7 @@ def get_detection_timestamps(
 
 def _compute_scores(
     confusion_matrix: dict[str, int],
-) -> tuple[float | int, float | int, float | int]:
+) -> Scores:
     """Compute precision, recall and f-score from a confusion matrix.
 
     Parameters
@@ -285,9 +296,11 @@ def detection_perf(
     score: Scores
         precision, recall and f-score
     confusion_matrix: ConfusionMatrix
-        Count of each category: true positive, false positive, true negative, false negative, error
+        Count of each category:
+        true positive, false positive, true negative, false negative, error
     classification: Classification
-        Lists of timestamps for each category: true positive, false positive, true negative, false negative, error
+        Lists of timestamps for each category:
+        true positive, false positive, true negative, false negative, error
 
     """
     timebin = get_max_time(df)

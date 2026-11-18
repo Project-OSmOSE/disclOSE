@@ -1,37 +1,37 @@
 """`data_aplose` module provides the `DataAplose` class.
 
-DataAplose class is used for handling, analyzing, and visualizing
-APLOSE-formatted detection data. It includes utilities to bin detections,
-plot time-based distributions, and manage metadata such as annotators and labels.
+`DataAplose` handles, analyzes and visualizes APLOSE-formatted detection data.
+Plotting lives in a pandas-like accessor (`DataAplose.plot`), e.g.:
+
+>>> data = DataAplose.from_dict({"detection_file": Path("results.csv"), ...})
+>>> data.coordinates = (48.39, -4.49)
+>>> fig, ax = plt.subplots()
+>>> data.plot.histogram("annotator", "label", bin_size=Timedelta("1D"), ax=ax)
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from copy import copy as _copy
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
 from pandas import (
-    NA,
     DataFrame,
-    Series,
+    MultiIndex,
     Timedelta,
-    Timestamp,
     concat,
-    cut,
     date_range,
-    read_csv,
+    to_datetime,
 )
 from pandas.tseries import offsets
 
 from disclose.dataclass.data_aplose_config import DataAploseConfig
 from disclose.dataclass.recording_period import RecordingPeriod
-from disclose.utils.core import build_time_vector, get_count
+from disclose.utils.core import get_count
 from disclose.utils.filtering import (
-    _build_detection_vector,
     get_annotators,
     get_dataset,
     get_labels,
@@ -51,52 +51,17 @@ from disclose.utils.visualisation import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import tzinfo
 
+    from matplotlib.axes import Axes
+    from pandas import Series, Timestamp
     from pandas.tseries.offsets import BaseOffset
 
+    from disclose.utils.metric import Classification, ConfusionMatrix, Scores
 
-default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-
-
-def _get_locator_from_offset(
-    offset: int | Timedelta | BaseOffset,
-) -> mdates.DateLocator:
-    """Map a pandas' offset object to the appropriate matplotlib DateLocator."""
-    if isinstance(offset, int):
-        return mdates.SecondLocator(interval=offset)
-
-    if isinstance(offset, Timedelta):
-        total_seconds = int(offset.total_seconds())
-        if total_seconds % 3600 == 0:
-            return mdates.HourLocator(interval=total_seconds // 3600)
-        if total_seconds % 60 == 0:
-            return mdates.MinuteLocator(interval=total_seconds // 60)
-        return mdates.SecondLocator(interval=total_seconds)
-
-    offset_to_locator = {
-        (
-            offsets.MonthEnd,
-            offsets.MonthBegin,
-            offsets.BusinessMonthEnd,
-            offsets.BusinessMonthBegin,
-        ): lambda offset: mdates.MonthLocator(interval=offset.n),
-        (offsets.Week,): lambda offset: mdates.WeekdayLocator(
-            byweekday=offset.weekday,
-            interval=offset.n,
-        ),
-        (offsets.Day,): lambda offset: mdates.DayLocator(interval=offset.n),
-        (offsets.Hour,): lambda offset: mdates.HourLocator(interval=offset.n),
-        (offsets.Minute,): lambda offset: mdates.MinuteLocator(interval=offset.n),
-    }
-
-    for offset_classes, locator_fn in offset_to_locator.items():
-        if isinstance(offset, offset_classes):
-            return locator_fn(offset)
-
-    msg = f"Unsupported offset type: {type(offset)}"
-    raise ValueError(msg)
-
+logger = logging.getLogger(__name__)
+plt.ioff()
 
 APLOSE_COLUMNS = [
     "dataset",
@@ -109,14 +74,98 @@ APLOSE_COLUMNS = [
     "annotator",
 ]
 
+_OFFSET_LOCATORS: dict[tuple[type, ...], Callable[[Any], mdates.DateLocator]] = {
+    (offsets.YearEnd, offsets.YearBegin): lambda o: mdates.YearLocator(base=o.n),
+    (
+        offsets.MonthEnd,
+        offsets.MonthBegin,
+        offsets.BusinessMonthEnd,
+        offsets.BusinessMonthBegin,
+    ): lambda o: mdates.MonthLocator(interval=o.n),
+    (offsets.Week,): lambda o: mdates.WeekdayLocator(
+        byweekday=o.weekday,
+        interval=o.n,
+    ),
+    (offsets.Day,): lambda o: mdates.DayLocator(interval=o.n),
+    (offsets.Hour,): lambda o: mdates.HourLocator(interval=o.n),
+    (offsets.Minute,): lambda o: mdates.MinuteLocator(interval=o.n),
+    (offsets.Second,): lambda o: mdates.SecondLocator(interval=o.n),
+}
+
+
+def _get_locator_from_offset(
+    offset: int | Timedelta | BaseOffset,
+) -> mdates.DateLocator:
+    """Map a pandas offset to the appropriate matplotlib DateLocator.
+
+    Parameters
+    ----------
+    offset: int | Timedelta | BaseOffset
+        An ``int`` is interpreted as a number of seconds.
+        A ``Timedelta`` is mapped to the coarsest locator (hour, minute, second)
+        that divides it exactly.
+
+    Raises
+    ------
+    ValueError
+        If the offset type is not supported.
+
+    """
+    if isinstance(offset, int):
+        return mdates.SecondLocator(interval=offset)
+
+    if isinstance(offset, Timedelta):
+        total_seconds = int(offset.total_seconds())
+        if total_seconds % 3600 == 0:
+            return mdates.HourLocator(interval=total_seconds // 3600)
+        if total_seconds % 60 == 0:
+            return mdates.MinuteLocator(interval=total_seconds // 60)
+        return mdates.SecondLocator(interval=total_seconds)
+
+    for offset_classes, locator_fn in _OFFSET_LOCATORS.items():
+        if isinstance(offset, offset_classes):
+            return locator_fn(offset)
+
+    msg = f"Unsupported offset type: {type(offset)}"
+    raise ValueError(msg)
+
 
 def empty_dataframe() -> DataFrame:
-    return DataFrame(columns=Series(APLOSE_COLUMNS))
+    """Return an empty DataFrame with the mandatory APLOSE columns."""
+    return DataFrame(columns=APLOSE_COLUMNS)
 
 
-@dataclass  # ruff: ignore[too-many-public-methods]
+@dataclass(eq=False)
 class DataAplose:
-    """A class to handle APLOSE formatted data."""
+    """Handle APLOSE-formatted detection data.
+
+    Attributes
+    ----------
+    df: DataFrame
+        APLOSE-formatted detections.
+    config: DataAploseConfig
+        Configuration the data was loaded with.
+    lat, lon: float | None
+        Position of the recorder in decimal degrees.
+        Required by the plots that display sunrise/sunset or seasons.
+        See also the ``coordinates`` property.
+
+    Notes
+    -----
+    ``reshape`` and ``change_tz`` modify the instance in place.
+    Use ``copy`` to work on an independent instance.
+    Equality is identity-based (comparing DataFrames is ambiguous).
+
+    Examples
+    --------
+    >>> data = DataAplose.from_dict({"detection_file": Path("results.csv")})
+    >>> data.coordinates = (48.39, -4.49)
+    >>> data.change_tz("Europe/Paris")
+    >>> perf = data.detection_perf(("ann1", "ann2"), ("lbl1", "lbl1"))
+    >>> _, ax = plt.subplots()
+    >>> data.plot.histogram("ann1", "lbl1", Timedelta("1D"), ax=ax, season=True)
+
+    """
 
     df: DataFrame = field(default_factory=empty_dataframe)
     config: DataAploseConfig = field(default_factory=DataAploseConfig.empty)
@@ -126,16 +175,13 @@ class DataAplose:
 
     _start_datetime: Timestamp | None = field(default=None, init=False, repr=False)
     _end_datetime: Timestamp | None = field(default=None, init=False, repr=False)
-    _annotator: list[str] | None = field(default=None, init=False, repr=False)
-    _label: list[str] | None = field(default=None, init=False, repr=False)
-    _dataset: list[str] | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._start_datetime: Timestamp | None = None
-        self._end_datetime: Timestamp | None = None
-        self._annotator: str | list[str] | None = None
-        self._label: str | list[str] | None = None
-        self._dataset: str | list[str] | None = None
+        """Check that the DataFrame is APLOSE-formatted."""
+        missing = [col for col in APLOSE_COLUMNS if col not in self.df.columns]
+        if missing:
+            msg = f"DataFrame is not APLOSE-formatted, missing columns: {missing}"
+            raise ValueError(msg)
 
     def __str__(self) -> str:
         """Return string representation of DataAplose object."""
@@ -151,67 +197,48 @@ class DataAplose:
         """Return string representation of DataAplose object."""
         return self.__str__()
 
+    # %% properties
+
     @property
     def annotator(self) -> str | list[str] | None:
-        if self.df.empty:
-            return None
+        """Annotator(s) of the data (a ``str`` if there is only one)."""
         return get_annotators(self.df)
-
-    @annotator.setter
-    def annotator(self, value: list[str]) -> None:
-        self._annotator = value
 
     @property
     def label(self) -> str | list[str] | None:
-        if self.df.empty:
-            return None
+        """Label(s) of the data (a ``str`` if there is only one)."""
         return get_labels(self.df)
-
-    @label.setter
-    def label(self, value: str | list[str]) -> None:
-        self._label = value
 
     @property
     def dataset(self) -> str | list[str] | None:
-        if self.df.empty:
-            return None
+        """Dataset(s) of the data (a ``str`` if there is only one)."""
         return get_dataset(self.df)
 
-    @dataset.setter
-    def dataset(self, value: str | list[str]) -> None:
-        self._dataset = value
-
     @property
-    def start_datetime(self):
+    def start_datetime(self) -> Timestamp | None:
+        """Beginning of the data.
+
+        This is the bound set by ``reshape`` if any, otherwise the earliest of
+        the configured start and the first detection.
+        """
         if self._start_datetime is not None:
             return self._start_datetime
-        if self.config.start_datetime:
-            return min(self.config.start_datetime, self.df["start_datetime"].min())
-        if not self.df.empty:
-            return self.df["start_datetime"].min()
-        return None
-
-    @start_datetime.setter
-    def start_datetime(self, value: Timestamp | None = None) -> None:
-        self._start_datetime = value
+        return self._bound("start_datetime", self.config.start_datetime, earliest=True)
 
     @property
-    def end_datetime(self):
+    def end_datetime(self) -> Timestamp | None:
+        """End of the data.
+
+        This is the bound set by ``reshape`` if any, otherwise the latest of
+        the configured end and the last detection.
+        """
         if self._end_datetime is not None:
             return self._end_datetime
-        if self.config.end_datetime:
-            return max(self.config.end_datetime, self.df["end_datetime"].max())
-        if not self.df.empty:
-            return self.df["end_datetime"].max()
-        return None
-
-    @end_datetime.setter
-    def end_datetime(self, value: Timestamp | None = None) -> None:
-        self._end_datetime = value
+        return self._bound("end_datetime", self.config.end_datetime, earliest=False)
 
     @property
     def coordinates(self) -> tuple[float | None, float | None]:
-        """Coordinates of the audio data."""
+        """Coordinates (lat, lon) of the data."""
         return self.lat, self.lon
 
     @coordinates.setter
@@ -221,18 +248,94 @@ class DataAplose:
             raise ValueError(msg)
         self.lat, self.lon = value
 
-    @classmethod
-    def from_config(cls, config: DataAploseConfig):
-        df = load_detections(config)
+    @property
+    def plot(self) -> PlotAccessor:
+        """Plotting namespace, e.g. ``data.plot.histogram(...)``."""
+        return PlotAccessor(self)
 
-        obj = cls(df=df, config=config)
+    # %% private helpers
 
-        obj.reshape(
-            config.start_datetime,
-            config.end_datetime,
+    def _localize(self, timestamp: Timestamp) -> Timestamp:
+        """Localize a naive timestamp in the timezone of the data.
+
+        Timezone-aware timestamps are returned untouched.
+        """
+        if timestamp.tz is not None or self.df.empty:
+            return timestamp
+        tz = get_timezone(self.df)
+        if isinstance(tz, list):
+            msg = (
+                "Cannot localize a naive timestamp: the data has several timezones. "
+                "Call `change_tz` first or provide a timezone-aware timestamp."
+            )
+            raise TypeError(msg)
+        return timestamp.tz_localize(tz)
+
+    def _bound(
+        self,
+        column: Literal["start_datetime", "end_datetime"],
+        config_value: Timestamp | None,
+        *,
+        earliest: bool,
+    ) -> Timestamp | None:
+        """Return the earliest/latest between the config value and the data."""
+        candidates = []
+        if config_value is not None:
+            candidates.append(self._localize(config_value))
+        if not self.df.empty:
+            series = self.df[column]
+            candidates.append(series.min() if earliest else series.max())
+        if not candidates:
+            return None
+        return min(candidates) if earliest else max(candidates)
+
+    @staticmethod
+    def _as_pairs(
+        annotator: str | list[str],
+        label: str | list[str],
+    ) -> list[tuple[str, str]]:
+        """Pair annotators and labels, broadcasting a lone ``str`` if needed."""
+        annotators = (
+            [annotator] * (1 if isinstance(label, str) else len(label))
+            if isinstance(annotator, str)
+            else list(annotator)
         )
+        labels = (
+            [label] * (1 if isinstance(annotator, str) else len(annotator))
+            if isinstance(label, str)
+            else list(label)
+        )
+        if len(annotators) != len(labels):
+            msg = (
+                f"Length of annotator ({len(annotators)}) and"
+                f" label ({len(labels)}) must match."
+            )
+            raise ValueError(msg)
+        return list(zip(annotators, labels, strict=True))
 
-        return obj
+    # %% constructors
+
+    @classmethod
+    def from_config(
+        cls,
+        config: DataAploseConfig,
+        *,
+        coordinates: tuple[float, float] | None = None,
+    ) -> Self:
+        """Load, filter and reshape detections from a configuration.
+
+        Parameters
+        ----------
+        config: DataAploseConfig
+            Loading and filtering configuration.
+        coordinates: tuple[float, float] | None
+            Optional (lat, lon) of the recorder.
+
+        """
+        obj = cls(df=load_detections(config), config=config)
+        if coordinates is not None:
+            obj.coordinates = coordinates
+        return obj.reshape(config.start_datetime, config.end_datetime)
 
     @classmethod
     def from_dict(
@@ -240,135 +343,166 @@ class DataAplose:
         config: dict | list[dict],
         *,
         merge: bool = True,
-    ) -> DataAplose | list[DataAplose]:
+        coordinates: tuple[float, float] | None = None,
+    ) -> Self | list[Self]:
+        """Build one or several instances from configuration dictionaries.
+
+        Parameters
+        ----------
+        config: dict | list[dict]
+            One configuration, or a list of them.
+        merge: bool
+            Only used if ``config`` is a list.
+            If ``True``, the instances are merged into a single one,
+            otherwise the list of instances is returned.
+        coordinates: tuple[float, float] | None
+            Optional (lat, lon) of the recorder, applied to every instance.
+
+        Returns
+        -------
+        A ``DataAplose``, or a list of them if ``config`` is a list
+        and ``merge`` is ``False``.
+
+        """
         configs = DataAploseConfig.from_dict(config)
 
         if isinstance(configs, DataAploseConfig):
-            return cls.from_config(configs)
+            return cls.from_config(configs, coordinates=coordinates)
 
-        datasets = [cls.from_config(conf) for conf in configs]
-
-        if merge:
-            return cls.merge(datasets)
-
-        return datasets
+        datasets = [cls.from_config(conf, coordinates=coordinates) for conf in configs]
+        return cls.merge(datasets) if merge else datasets
 
     @classmethod
-    def merge(
-        cls,
-        datasets: list[DataAplose],
-    ) -> DataAplose:
+    def merge(cls, datasets: list[DataAplose]) -> Self:
+        """Merge several instances into one.
+
+        Detections are concatenated and sorted.
+        If the instances don't share a timezone, all timestamps are converted to UTC.
+        Coordinates are kept if all the instances that have some agree.
+
+        Raises
+        ------
+        ValueError
+            If ``datasets`` is empty.
+
+        """
+        if not datasets:
+            msg = "No DataAplose to merge."
+            raise ValueError(msg)
 
         df = (
-            concat(
-                [d.df for d in datasets],
-                ignore_index=True,
-            )
-            .sort_values([
-                "start_datetime",
-                "end_datetime",
-                "annotator",
-                "label",
-            ])
+            concat([d.df for d in datasets], ignore_index=True)
+            .sort_values(["start_datetime", "end_datetime", "annotator", "label"])
             .reset_index(drop=True)
         )
+        obj = cls(df=df, config=DataAploseConfig.merge([d.config for d in datasets]))
 
-        config = DataAploseConfig.merge([d.config for d in datasets])
-
-        obj = cls(df=df, config=config)
+        coordinates = {d.coordinates for d in datasets if None not in d.coordinates}
+        if len(coordinates) == 1:
+            obj.coordinates = coordinates.pop()
 
         if isinstance(get_timezone(df), list):
             obj.change_tz("UTC")
-            msg = (
-                "Several timezones found in DataFrame,"
-                " all timestamps are converted to UTC."
+            logger.info(
+                "Several timezones found in DataFrame, all timestamps are converted "
+                "to UTC.",
             )
-            logging.info(msg)
 
         return obj
+
+    # %% transformations
+
+    def copy(self) -> Self:
+        """Return an independent copy (the DataFrame is copied)."""
+        new = replace(self, df=self.df.copy(), config=_copy(self.config))
+        new._start_datetime = self._start_datetime  # ruff: ignore[private-member-access]
+        new._end_datetime = self._end_datetime  # ruff: ignore[private-member-access]
+        return new
 
     def reshape(
         self,
         start_datetime: Timestamp | None = None,
         end_datetime: Timestamp | None = None,
-    ) -> DataAplose:
-        """Reshape the DataAplose with a new beginning and/or end."""
-        if not any([start_datetime, end_datetime]):
-            msg = "No begin/end timestamps provided for reshape of DataAplose instance."
-            logging.debug(msg)
+    ) -> Self:
+        """Restrict the data to a new beginning and/or end, in place.
+
+        Parameters
+        ----------
+        start_datetime, end_datetime: Timestamp | None
+            New bounds. Naive timestamps are localized in the timezone of the data.
+            A ``None`` bound is taken from the data.
+
+        Returns
+        -------
+        The instance itself, to allow chaining.
+
+        Raises
+        ------
+        ValueError
+            If the beginning is not anterior to the end.
+
+        """
+        if start_datetime is None and end_datetime is None:
+            logger.debug("No begin/end timestamps provided, nothing to reshape.")
+            return self
+        if self.df.empty:
+            logger.debug("Empty DataFrame, nothing to reshape.")
             return self
 
-        if start_datetime is None:
-            start_datetime = self.df["start_datetime"].min()
-
-        if end_datetime is None:
-            end_datetime = self.df["end_datetime"].max()
-
-        self.start_datetime = start_datetime
-        self.end_datetime = end_datetime
-
-        tz = get_timezone(self.df)
-
-        if start_datetime:
-            self.start_datetime = start_datetime
-            if not start_datetime.tz:
-                self.start_datetime = start_datetime.tz_localize(tz)
-
-        if end_datetime:
-            self.end_datetime = end_datetime
-            if not end_datetime.tz:
-                self.end_datetime = end_datetime.tz_localize(tz)
-
-        if self.start_datetime >= self.end_datetime:
+        start = (
+            self._localize(start_datetime)
+            if start_datetime is not None
+            else self.df["start_datetime"].min()
+        )
+        end = (
+            self._localize(end_datetime)
+            if end_datetime is not None
+            else self.df["end_datetime"].max()
+        )
+        if start >= end:
             msg = "Begin timestamp is not anterior than end timestamp."
             raise ValueError(msg)
 
+        self._start_datetime, self._end_datetime = start, end
         self.df = self.df[
-            (self.df["start_datetime"] >= self.start_datetime)
-            & (self.df["end_datetime"] <= self.end_datetime)
+            (self.df["start_datetime"] >= start) & (self.df["end_datetime"] <= end)
         ]
-
-        if self.df.empty:
-            return self
-
-        self.dataset = get_dataset(self.df)
-        self.label = get_labels(self.df)
-        self.annotator = get_annotators(self.df)
-
         return self
 
     def change_tz(self, tz: str | tzinfo) -> None:
-        """Change the timezone of a DataAplose instance.
+        """Convert all timestamps to another timezone, in place.
+
+        Parameters
+        ----------
+        tz: str | tzinfo
+            Target timezone, e.g. ``"UTC"``, ``"Europe/Paris"`` or a ``pytz`` object.
 
         Examples
         --------
-        >>> import pytz
-        >>> data = DataAplose(...)
+        >>> data.change_tz("Europe/Paris")
         >>> data.change_tz(pytz.timezone("Etc/GMT-2"))
 
-        >>> data = DataAplose(...)
-        >>> data.change_tz("UTC")
-
-        >>> data = DataAplose(...)
-        >>> data.change_tz("UTC+02:00")
-
         """
-        self.df["start_datetime"] = [
-            elem.tz_convert(tz) for elem in self.df["start_datetime"]
-        ]
-        self.df["end_datetime"] = [
-            elem.tz_convert(tz) for elem in self.df["end_datetime"]
-        ]
-
-        self.start_datetime = self.start_datetime.tz_convert(tz)
-        self.end_datetime = self.end_datetime.tz_convert(tz)
+        self.df = self.df.assign(
+            **{
+                col: to_datetime(self.df[col], utc=True).dt.tz_convert(tz)
+                for col in ("start_datetime", "end_datetime")
+            },
+        )
+        start, end = self.start_datetime, self.end_datetime
+        self._start_datetime = None if start is None else start.tz_convert(tz)
+        self._end_datetime = None if end is None else end.tz_convert(tz)
 
     def filter_df(
         self,
         annotator: str | list[str],
         label: str | list[str],
     ) -> DataFrame:
-        """Filter DataFrame based on annotator and label.
+        """Filter the detections on annotator/label pairs.
+
+        Annotators and labels are paired element-wise (not as a cross-product):
+        ``(["a1", "a2"], ["l1", "l2"])`` selects ``(a1, l1)`` and ``(a2, l2)``.
+        A lone ``str`` is broadcast to the length of the other argument.
 
         Parameters
         ----------
@@ -379,293 +513,503 @@ class DataAplose:
 
         Returns
         -------
-        The filtered DataFrame.
+        The filtered DataFrame, with a reset index.
 
         Raises
         ------
         ValueError
-            If annotator or label are not valid or if the filtered Dataframe is empty.
+            If annotator or label are unknown, if the lists differ in length,
+            or if a pair has no detection.
 
         """
-        if isinstance(label, str):
-            label = [label] if isinstance(annotator, str) else [label] * len(annotator)
-        if isinstance(annotator, str):
-            annotator = (
-                [annotator] if isinstance(label, str) else [annotator] * len(label)
-            )
-        if len(annotator) != len(label):
-            msg = (
-                f"Length of annotator ({len(annotator)}) and"
-                f" label ({len(label)}) must match."
-            )
-            raise ValueError(msg)
+        pairs = self._as_pairs(annotator, label)
+        known_annotators = set(self.df["annotator"])
+        known_labels = set(self.df["label"])
 
-        for ant, lbl in zip(annotator, label, strict=False):
-            if ant not in self.annotator:
+        for ant, lbl in pairs:
+            if ant not in known_annotators:
                 msg = f'Annotator "{ant}" not in APLOSE DataFrame'
                 raise ValueError(msg)
-            if lbl not in self.label:
+            if lbl not in known_labels:
                 msg = f'Label "{lbl}" not in APLOSE DataFrame'
                 raise ValueError(msg)
-            if self.df[(self.df["annotator"] == ant) & (self.df["label"] == lbl)].empty:
+            if not ((self.df["annotator"] == ant) & (self.df["label"] == lbl)).any():
                 msg = (
                     f"DataFrame with annotator '{ant}' / label '{lbl}'"
                     f" contains no detection."
                 )
                 raise ValueError(msg)
-        config = list(zip(annotator, label, strict=False))
-        return self.df[
-            self.df[["annotator", "label"]].apply(tuple, axis=1).isin(config)
-        ].reset_index(drop=True)
 
-    def set_ax(
+        mask = MultiIndex.from_frame(self.df[["annotator", "label"]]).isin(pairs)
+        return self.df.loc[mask].reset_index(drop=True)
+
+    def filter(
         self,
-        ax: Axes,
-        x_ticks_res: Timedelta | offsets.BaseOffset,
-        date_format: str,
-    ) -> Axes:
-        """Configure a Matplotlib axis for time-based plot.
-
-        Sets up x-axis with appropriate limits, tick spacing,
-        formatting, and grid styling.
+        annotator: str | list[str],
+        label: str | list[str],
+    ) -> Self:
+        """Return a new DataAplose containing only selected detections.
 
         Parameters
         ----------
-        ax : matplotlib.axes.Axes
-            The Axes object to configure.
-        x_ticks_res : Timedelta | offsets.BaseOffset
-            Resolution of the x-axis major ticks.
-        date_format : str
-            Date format string for x-axis tick labels (e.g., "%b", "%Y-%m-%d %H:%M").
+        annotator: str | list[str]
+            Annotator(s) to select.
+        label: str | list[str]
+            Label(s) to select.
 
         Returns
         -------
-        matplotlib.axes.Axes
-            The configured Axes object, ready for plotting.
+        DataAplose
+            An independent filtered instance preserving the original
+            configuration, coordinates, and datetime bounds.
 
         """
-        ax.xaxis.set_major_locator(
-            _get_locator_from_offset(offset=x_ticks_res),
-        )
-        date_formatter = mdates.DateFormatter(
-            fmt=date_format, tz=self.start_datetime.tz,
-        )
-        ax.xaxis.set_major_formatter(date_formatter)
-        ax.grid(linestyle="--", linewidth=0.2, axis="both", zorder=1)
+        filtered = self.copy()
+        filtered.df = self.filter_df(annotator, label)
+        return filtered
 
-        return ax
+    # %% analysis
 
-    def overview(self, annotator: str | list[str]) -> None:
-        """Overview of an APLOSE formatted DataFrame."""
-        overview(df=self.df, annotator=annotator)
+    def overview(self, annotator: str | list[str]) -> DataFrame:
+        """Plot an overview of the detections of the given annotator(s)."""
+        return overview(df=self.df, annotator=annotator)
 
     def detection_perf(
         self,
         annotator: tuple[str, str] | list[str],
         label: tuple[str, str] | list[str],
-    ) -> tuple[float, float, float]:
-        """Compute performance metrics for detection.
+    ) -> tuple[Scores, ConfusionMatrix, Classification]:
+        """Compute detection performance metrics.
 
-        Precision and recall are computed in regard to a reference annotator/label pair.
+        Performances are computed for the second annotator/label pair
+        in regard to the first (reference) pair.
 
         Parameters
         ----------
-        annotator: [str, str]
-            List of the two annotators to compare.
-            The first annotator is chosen as a reference.
-        label: [str, str]
-            List of the two labels to compare.
-            The first label is chosen as a reference.
+        annotator: tuple[str, str] | list[str]
+            The two annotators to compare. The first is the reference.
+        label: tuple[str, str] | list[str]
+            The two labels to compare. The first is the reference.
 
         Returns
         -------
-        precision: float
-        recall: float
-        f_score: float
+        scores: Scores
+            Precision, recall and f-score.
+        confusion_matrix: ConfusionMatrix
+            Count of true/false positives/negatives and errors.
+        classification: Classification
+            Timestamps of each of these categories.
 
         """
-        df_filtered = self.filter_df(
-            annotator,
-            label,
-        )
+        df_filtered = self.filter_df(annotator, label)
 
-        ref = (annotator[0], label[0])
-
-        if len(set(df_filtered["end_time"])) > 1:
+        if df_filtered["end_time"].nunique() > 1:
             msg = "Multiple time bins detected in DataFrame."
             raise ValueError(msg)
         timebin = Timedelta(df_filtered["end_time"].iloc[0], "s")
 
-        effort = RecordingPeriod.from_config(config=self.config, bin_size=timebin) if self.config.recording_file else None
+        effort = (
+            RecordingPeriod.from_config(config=self.config, bin_size=timebin)
+            if self.config.recording_file
+            else None
+        )
 
         return detection_perf(
             df=df_filtered,
-            ref=ref,
+            ref=(annotator[0], label[0]),
             time=date_range(self.start_datetime, self.end_datetime, freq=timebin),
             effort=effort,
         )
 
-    def plot_histogram(
+
+class PlotAccessor:
+    """Plotting namespace of a `DataAplose`, available as ``data.plot``.
+
+    Plot methods accept an optional keyword-only ``ax`` and create one when absent.
+    The accessor is callable, like in pandas: ``data.plot("polar", ...)``
+    is the same as ``data.plot.polar(...)``.
+    """
+
+    _KINDS: ClassVar[frozenset[str]] = frozenset(
+        {"histogram", "polar", "heatmap", "scatter", "timeline", "agreement"},
+    )
+
+    def __init__(self, data: DataAplose) -> None:
+        """Bind the accessor to a ``DataAplose``."""
+        self._data = data
+
+    def __call__(self, kind: str, *args: Any, **kwargs: Any) -> Any:  # ruff: ignore[any-type]
+        """Dispatch to the plotting method named ``kind``."""
+        if kind not in self._KINDS:
+            msg = f"Unknown plot kind '{kind}', expected one of {sorted(self._KINDS)}."
+            raise ValueError(msg)
+        return getattr(self, kind)(*args, **kwargs)
+
+    # %% helpers
+
+    @staticmethod
+    def _get_ax(ax: Axes | None = None, *, polar: bool = False) -> Axes:
+        """Return the provided Axes or create one with the requested projection."""
+        if ax is not None:
+            return ax
+        _, ax = plt.subplots(subplot_kw={"projection": "polar"} if polar else None)
+        return ax
+
+    @staticmethod
+    def _tight_layout(ax: Axes | None) -> Axes | None:
+        """Adjust the figure layout after plotting, preserving the Axes."""
+        if ax is not None:
+            ax.figure.tight_layout()
+        return ax
+
+    def _coordinates(
+        self,
+        override: tuple[float, float] | None,
+        *,
+        required: bool,
+    ) -> tuple[float | None, float | None]:
+        """Return the coordinates to use, failing early if they are required."""
+        coordinates = override if override is not None else self._data.coordinates
+        if required and None in coordinates:
+            msg = (
+                "Coordinates are required for this plot: set `data.coordinates = "
+                "(lat, lon)` or pass `coordinates=(lat, lon)`."
+            )
+            raise ValueError(msg)
+        return coordinates
+
+    def _effort(
+        self,
+        effort: bool,  # ruff: ignore[boolean-type-hint-positional-argument]
+        bin_size: Timedelta | BaseOffset,
+    ) -> RecordingPeriod | None:
+        """Build the recording effort if requested."""
+        if not effort:
+            return None
+        return RecordingPeriod.from_config(config=self._data.config, bin_size=bin_size)
+
+    def set_ax(
         self,
         ax: Axes,
-        annotator: str | list[str],
-        label: str | list[str],
-        bin_size: Timedelta | BaseOffset,
-        **plot_kwargs: bool | str | list[str],
+        x_ticks_res: int | Timedelta | BaseOffset,
+        date_format: str,
     ) -> Axes:
-        """Plot a histogram of data.
+        """Configure a Matplotlib axis for a time-based plot.
 
         Parameters
         ----------
         ax: Axes
-            Matplotlib Axes object to plot on.
-        annotator: str | list[str]
-            The selected annotator or list of annotators.
-        label: str | list[str]
-            The selected label or list of labels.
-        bin_size: Timedelta | BaseOffset
-            Bars width
-        **plot_kwargs: Any
-            Additional keyword arguments for optional plot parameters.
-            - legend: bool
-                Whether to show the legend.
-            - season: bool
-                Whether to show the season.
-            - color: str | list[str]
-                Color(s) for the bars.
-            - effort: bool
-                The timestamp intervals corresponding to the observation effort.
-                If provided by the `recording_file` argument,
-                data will be normalized by observation effort.
+            The Axes object to configure.
+        x_ticks_res: int | Timedelta | BaseOffset
+            Resolution of the x-axis major ticks (an ``int`` is in seconds).
+        date_format: str
+            Date format of the x-axis tick labels (e.g. ``"%b"``, ``"%Y-%m-%d %H:%M"``).
+
+        Returns
+        -------
+        The configured Axes.
 
         """
-        df_filtered = self.filter_df(annotator, label)
-        ax.set_xlim(self.start_datetime, self.end_datetime)
-        df_counts = get_count(df_filtered, bin_size)
-        detection_size = Timedelta(max(df_filtered["end_time"]), "s")
-        plot_kwargs["coordinates"] = (self.lat, None)
-        if plot_kwargs.get("effort"):
-            plot_kwargs["effort"] = RecordingPeriod.from_config(
-                config=self.config, bin_size=bin_size,
-            )
-        return histo(
-            df=df_counts,
-            ax=ax,
-            bin_size=bin_size,
-            time_bin=detection_size,
-            **plot_kwargs,
+        start = self._data.start_datetime
+        ax.xaxis.set_major_locator(_get_locator_from_offset(offset=x_ticks_res))
+        ax.xaxis.set_major_formatter(
+            mdates.DateFormatter(
+                fmt=date_format,
+                tz=None if start is None else start.tz,
+            ),
         )
+        ax.grid(linestyle="--", linewidth=0.2, axis="both", zorder=1)
+        return ax
 
-    def plot_polar(
+    # %% plots
+
+    def histogram(  # ruff: ignore[too-many-arguments]
         self,
-        ax: Axes,
         annotator: str | list[str],
         label: str | list[str],
-        **plot_kwargs: Any,
-    ) -> Axes:
-        plot_kwargs["coordinates"] = (self.lat, self.lon)
-        df_filtered = self.filter_df(annotator, label)
-        return polar(
-            df=df_filtered,
-            ax=ax,
-            **plot_kwargs,
-        )
+        bin_size: Timedelta | BaseOffset,
+        *,
+        ax: Axes | None = None,
+        legend: bool = False,
+        season: bool = False,
+        color: str | list[str] | None = None,
+        effort: bool = False,
+        coordinates: tuple[float, float] | None = None,
+    ) -> Axes | None:
+        """Plot a histogram of detections.
 
-    def plot_heatmap(self, annotator: str | list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
-        df_filtered = self.filter_df(annotator, label)
-        dates = date_range(self.start_datetime, self.end_datetime)
-        coordinates = self.coordinates
-        bin_size = kwargs.get("bin_size")
-        season = kwargs.get("season")
-        effort = kwargs.get("effort", False)
-        if effort:
-            effort = RecordingPeriod.from_config(config=self.config, bin_size=bin_size)
-        show_rise_set = kwargs.get("show_rise_set", True)
-        ax.set_xlim(self.start_datetime, self.end_datetime)
-        return heatmap(
+        Parameters
+        ----------
+        ax: Axes | None
+            Axes to plot on.
+        annotator, label: str | list[str]
+            Selection, see ``DataAplose.filter_df``.
+        bin_size: Timedelta | BaseOffset
+            Width of the bars.
+        legend: bool
+            Whether to show the legend.
+        season: bool
+            Whether to show the season bar. Requires the latitude.
+        color: str | list[str] | None
+            Color(s) of the bars.
+        effort: bool
+            If ``True``, data are normalized by the observation effort given by
+            the ``recording_file`` of the config.
+        coordinates: tuple[float, float] | None
+            Overrides ``data.coordinates``.
+
+        Returns
+        -------
+        The Axes, or ``None`` if there are too few detections to plot.
+
+        """
+        ax = self._get_ax(ax)
+        data = self._data
+        df_filtered = data.filter_df(annotator, label)
+        lat, _ = self._coordinates(coordinates, required=season)
+
+        ax.set_xlim(data.start_datetime, data.end_datetime)
+        result = histo(
+            df=get_count(df_filtered, bin_size),
+            ax=ax,
+            bin_size=bin_size,
+            time_bin=Timedelta(df_filtered["end_time"].max(), "s"),
+            legend=legend,
+            season=season,
+            color=color,
+            effort=self._effort(effort, bin_size),
+            coordinates=(lat, None),
+        )
+        return self._tight_layout(result)
+
+    def polar(
+        self,
+        annotator: str | list[str],
+        label: str | list[str],
+        *,
+        ax: Axes | None = None,
+        show_rise_set: bool = False,
+        coordinates: tuple[float, float] | None = None,
+        **bar_kwargs: Any,  # ruff: ignore[any-type]
+    ) -> tuple[Axes, Series]:
+        """Plot the mean proportion of detected bins per hour of the day.
+
+        Parameters
+        ----------
+        ax: Axes | None
+            Optional polar Axes; created with a polar projection when omitted.
+        annotator, label: str | list[str]
+            Selection, see ``DataAplose.filter_df``.
+        show_rise_set: bool
+            Whether to draw the day/night band. Requires the coordinates.
+        coordinates: tuple[float, float] | None
+            Overrides ``data.coordinates``.
+        **bar_kwargs
+            Forwarded to ``ax.bar`` (color, alpha, edgecolor...).
+
+        Returns
+        -------
+        The Axes and the mean proportion of detections for each hour of the day.
+
+        """
+        ax = self._get_ax(ax, polar=True)
+        coords = self._coordinates(coordinates, required=show_rise_set)
+        result = polar(
+            df=self._data.filter_df(annotator, label),
+            ax=ax,
+            show_rise_set=show_rise_set,
+            coordinates=coords,
+            **bar_kwargs,
+        )
+        self._tight_layout(ax)
+        return result
+
+    def heatmap(  # ruff: ignore[too-many-arguments]
+        self,
+        annotator: str | list[str],
+        label: str | list[str],
+        bin_size: Timedelta | BaseOffset,
+        *,
+        ax: Axes | None = None,
+        show_rise_set: bool = True,
+        season: bool = False,
+        effort: bool = False,
+        coordinates: tuple[float, float] | None = None,
+    ) -> Axes:
+        """Plot a heatmap of detections (hour of day vs. time).
+
+        Parameters
+        ----------
+        ax: Axes | None
+            Optional Axes to plot on; created automatically when omitted.
+        annotator, label: str | list[str]
+            Selection, see ``DataAplose.filter_df``.
+        bin_size: Timedelta | BaseOffset
+            Size of the cells. Must be >= 24h.
+        show_rise_set: bool
+            Whether to overlay sunrise and sunset.
+        season: bool
+            Whether to show the season bar.
+        effort: bool
+            Whether to shade the periods without recording effort.
+        coordinates: tuple[float, float] | None
+            Overrides ``data.coordinates``. Required.
+
+        """
+        ax = self._get_ax(ax)
+        data = self._data
+        coords = self._coordinates(coordinates, required=True)
+        df_filtered = data.filter_df(annotator, label)
+
+        ax.set_xlim(data.start_datetime, data.end_datetime)
+        result = heatmap(
             df=df_filtered,
             ax=ax,
             bin_size=bin_size,
-            time_range=dates,
+            time_range=date_range(data.start_datetime, data.end_datetime),
             show_rise_set=show_rise_set,
             season=season,
-            effort=effort,
-            coordinates=coordinates,
+            effort=self._effort(effort, bin_size),
+            coordinates=coords,
         )
+        self._tight_layout(ax)
+        return result
 
-    def plot_scatter(self, annotator: str | list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
-        df_filtered = self.filter_df(annotator, label)
-        coordinates = kwargs.get("coordinates") or self.coordinates
-        bin_size = kwargs.get("bin_size") or get_max_time(self.df)
-        season = kwargs.get("season")
-        effort = kwargs.get("effort", False)
-        if effort:
-            effort = RecordingPeriod.from_config(config=self.config, bin_size=bin_size)
-        dates = date_range(start=self.start_datetime, end=self.end_datetime, freq=bin_size)
-        show_rise_set = kwargs.get("show_rise_set", True)
-        ax.set_xlim(self.start_datetime, self.end_datetime)
-        return scatter(
+    def scatter(  # ruff: ignore[too-many-arguments]
+        self,
+        annotator: str | list[str],
+        label: str | list[str],
+        *,
+        ax: Axes | None = None,
+        bin_size: Timedelta | BaseOffset | None = None,
+        show_rise_set: bool = True,
+        season: bool = False,
+        effort: bool = False,
+        coordinates: tuple[float, float] | None = None,
+    ) -> Axes:
+        """Scatter-plot detections (hour of day vs. time).
+
+        Parameters
+        ----------
+        ax: Axes | None
+            Optional Axes to plot on; created automatically when omitted.
+        annotator, label: str | list[str]
+            Selection, see ``DataAplose.filter_df``.
+        bin_size: Timedelta | BaseOffset | None
+            Resolution of the time vector. Defaults to the detection duration.
+        show_rise_set: bool
+            Whether to overlay sunrise and sunset.
+        season: bool
+            Whether to show the season bar.
+        effort: bool
+            Whether to shade the periods without recording effort.
+        coordinates: tuple[float, float] | None
+            Overrides ``data.coordinates``. Required.
+
+        """
+        ax = self._get_ax(ax)
+        data = self._data
+        coords = self._coordinates(coordinates, required=True)
+        df_filtered = data.filter_df(annotator, label)
+        bin_size = bin_size or get_max_time(data.df)
+
+        ax.set_xlim(data.start_datetime, data.end_datetime)
+        scatter(
             df=df_filtered,
             ax=ax,
-            time_range=dates,
+            time_range=date_range(
+                start=data.start_datetime,
+                end=data.end_datetime,
+                freq=bin_size,
+            ),
             show_rise_set=show_rise_set,
             season=season,
-            coordinates=coordinates,
-            effort=effort,
+            coordinates=coords,
+            effort=self._effort(effort, bin_size),
         )
+        return self._tight_layout(ax)
 
-    def plot_timeline(self, annotator: str | list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
-        ax.set_xlim(self.start_datetime, self.end_datetime)
-        df_filtered = self.filter_df(
-            annotator,
-            label,
-        )
-        kwargs["coordinates"] = self.coordinates
-        timeline(df=df_filtered, ax=ax, **kwargs)
+    def timeline(  # ruff: ignore[too-many-arguments]
+        self,
+        annotator: str | list[str],
+        label: str | list[str],
+        *,
+        ax: Axes | None = None,
+        color: list[str] | None = None,
+        season: bool = False,
+        effort: bool = False,
+        bin_size: Timedelta | BaseOffset | None = None,
+        coordinates: tuple[float, float] | None = None,
+    ) -> Axes:
+        """Plot detections on a timeline, one row per label.
 
-    def plot_agreement(self, annotator: list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
-        df_filtered = self.filter_df(
-            annotator,
-            label,
+        Parameters
+        ----------
+        ax: Axes | None
+            Optional Axes to plot on; created automatically when omitted.
+        annotator, label: str | list[str]
+            Selection, see ``DataAplose.filter_df``.
+        color: list[str] | None
+            One color per label.
+        season: bool
+            Whether to show the season bar. Requires the latitude.
+        effort: bool
+            Whether to shade the periods without recording effort.
+        bin_size: Timedelta | BaseOffset | None
+            Resolution of the effort. Defaults to the detection duration.
+        coordinates: tuple[float, float] | None
+            Overrides ``data.coordinates``.
+
+        """
+        ax = self._get_ax(ax)
+        data = self._data
+        coords = self._coordinates(coordinates, required=season)
+        df_filtered = data.filter_df(annotator, label)
+
+        ax.set_xlim(data.start_datetime, data.end_datetime)
+        result = timeline(
+            df=df_filtered,
+            ax=ax,
+            color=color,
+            season=season,
+            coordinates=coords,
+            effort=self._effort(effort, bin_size or get_max_time(df_filtered)),
         )
-        bin_size = kwargs.get("bin_size")
+        self._tight_layout(ax)
+        return result
+
+    def agreement(
+        self,
+        annotator: list[str],
+        label: str | list[str],
+        bin_size: Timedelta | BaseOffset | None = None,
+        *,
+        ax: Axes | None = None,
+    ) -> Axes:
+        """Plot the inter-annotator agreement (detection counts per bin).
+
+        Parameters
+        ----------
+        ax: Axes | None
+            Optional Axes to plot on; created automatically when omitted.
+        annotator: list[str]
+            The two annotators to compare.
+        label: str | list[str]
+            Label(s) to compare.
+        bin_size: Timedelta | BaseOffset
+            Size of the time bins in which detections are counted.
+
+        Raises
+        ------
+        ValueError
+            If ``bin_size`` is missing.
+
+        """
+        ax = self._get_ax(ax)
         if not bin_size:
             msg = "'bin_size' missing for agreement plot."
             raise ValueError(msg)
-        df_counts = get_count(df_filtered, bin_size)
-        plot_annotator_agreement(df=df_counts, ax=ax)
-        return ax
-
-    def add_dpm(self) -> None:
-        """Add the detection per minute `DPM` column to DataFrame."""
-        df_dpm = read_csv(
-            self.config.detection_file, parse_dates=["start_datetime", "end_datetime"],
+        df_filtered = self._data.filter_df(annotator, label)
+        return self._tight_layout(
+            plot_annotator_agreement(df=get_count(df_filtered, bin_size), ax=ax)
         )
-        self.df["dpm_count"] = NA
-        ts_detect_beg = df_dpm["start_datetime"].to_list()
-        ts_detect_end = df_dpm["end_datetime"].to_list()
-
-        annotators = (
-            [self.annotator] if isinstance(self.annotator, str) else self.annotator
-        )
-
-        for ann in annotators:
-            if ann.lower() in {"fpod", "cpod"}:
-                df_sel = self.df[(self.df["annotator"] == ann)]
-                time_vector = build_time_vector(df_sel, self.config.timebin_new)
-                bins = list(time_vector) + [time_vector[-1] + self.config.timebin_new]
-
-                detect_vec = _build_detection_vector(
-                    time_vector, ts_detect_beg, ts_detect_end,
-                )
-                counts = (
-                    cut(ts_detect_beg, bins=bins, right=False)
-                    .value_counts()
-                    .sort_index()
-                )
-
-                dpm_values = [
-                    counts.iloc[i] for i, detected in enumerate(detect_vec) if detected
-                ]
-
-                self.df.loc[df_sel.index, "dpm_count"] = dpm_values

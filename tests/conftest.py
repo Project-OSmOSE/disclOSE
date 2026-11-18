@@ -8,7 +8,7 @@ import soundfile as sf
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from osekit.utils.timestamp import strftime_osmose_format
-from pandas import DataFrame, DatetimeIndex, date_range, read_csv
+from pandas import DataFrame, DatetimeIndex, date_range, read_csv, Timedelta
 
 from disclose.dataclass.data_aplose import DataAplose
 
@@ -150,6 +150,16 @@ def sample_df() -> DataFrame:
 
 
 @pytest.fixture
+def sample_data_aplose(sample_csv_result: Path) -> DataAplose | list[DataAplose]:
+    config = {
+        "detection_file": sample_csv_result,
+        "filename_format": "%Y_%m_%d_%H_%M_%S",
+        "timebin_new": Timedelta(seconds=60),
+    }
+    return DataAplose.from_dict(config=config)
+
+
+@pytest.fixture
 def df_ann1_lbl1(sample_df: DataFrame) -> DataFrame:
     """Weak detections of a single annotator/label pair."""
     return sample_df[
@@ -162,11 +172,6 @@ def df_ann1_lbl1(sample_df: DataFrame) -> DataFrame:
 @pytest.fixture
 def time_range(df_ann1_lbl1: DataFrame) -> DatetimeIndex:
     return date_range("2025-01-25", "2025-01-27", freq="D", tz="UTC")
-
-
-@pytest.fixture
-def sample_data_aplose(sample_df: DataFrame) -> DataAplose:
-    return DataAplose(sample_df)
 
 
 @pytest.fixture
