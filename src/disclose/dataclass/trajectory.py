@@ -43,7 +43,7 @@ class Trajectory:
         self.longitudes = np.append(self.longitudes, longitude)
 
         # Update linear interpolators
-        if self.timestamps.size >= 2:  # noqa: PLR2004
+        if self.timestamps.size >= 2:  # ruff: ignore[magic-value-comparison]
             self.lat_interp = interp1d(
                 self.timestamps,
                 self.latitudes,

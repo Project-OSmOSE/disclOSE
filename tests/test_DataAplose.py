@@ -9,10 +9,12 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pytest
 import pytz
+from matplotlib.axes import Axes
 from pandas import DataFrame, Timedelta, Timestamp
 from pandas.tseries import frequencies
 
 from disclose.dataclass.data_aplose import DataAplose, _get_locator_from_offset
+from disclose.dataclass.data_aplose_config import DataAploseConfig
 from disclose.utils.filtering import get_timezone
 
 
@@ -210,7 +212,7 @@ def test_histo(sample_csv_result: DataFrame, recording_planning_csv: DataFrame) 
 
 
 def test_histo_no_recording_file_provided(
-    sample_csv_result: DataFrame, recording_planning_csv: DataFrame
+    sample_csv_result: DataFrame, recording_planning_csv: DataFrame,
 ) -> None:
     dict_test = {
         "detection_file": sample_csv_result,
@@ -237,7 +239,7 @@ def test_histo_no_recording_file_provided(
 
 
 def test_histo_no_recording_fake_file_provided(
-    sample_csv_result: DataFrame, recording_planning_csv: DataFrame
+    sample_csv_result: DataFrame, recording_planning_csv: DataFrame,
 ) -> None:
     dict_test = {
         "detection_file": sample_csv_result,
@@ -282,7 +284,7 @@ def test_heatmap_wrong_bin(sample_df: DataFrame) -> None:
     bins = frequencies.to_offset("10s")
     _, ax = plt.subplots()
     with pytest.raises(
-        ValueError, match=r"`bin_size` must be >= 24h for heatmap mode."
+        ValueError, match=r"`bin_size` must be >= 24h for heatmap mode.",
     ):
         data.plot_heatmap(
             ax=ax,
@@ -298,10 +300,10 @@ def test_plot_histogram_missing_bin_size(monkeypatch, sample_df: DataFrame) -> N
 
     monkeypatch.setattr(obj, "filter_df", lambda annotator, label: sample_df)
     monkeypatch.setattr(
-        "disclose.dataclass.data_aplose.histo", lambda *args, **kwargs: None
+        "disclose.dataclass.data_aplose.histo", lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
-        "disclose.dataclass.data_aplose.get_count", lambda *args, **kwargs: None
+        "disclose.dataclass.data_aplose.get_count", lambda *args, **kwargs: None,
     )
 
     _, ax = plt.subplots()
@@ -485,6 +487,7 @@ def test_data_aplose_overview(monkeypatch, sample_df: DataFrame) -> None:
     assert called["annotator"] == annotator
 
 
+# %% detection_perf
 def test_detection_perf_multiple_timebins(sample_df: DataFrame) -> None:
     obj = DataAplose(sample_df)
 
@@ -494,6 +497,21 @@ def test_detection_perf_multiple_timebins(sample_df: DataFrame) -> None:
             label=("lbl1", "lbl2"),
         )
 
+
+def test_detection_perf(sample_csv_result: Path, recording_planning_csv: Path) -> None:
+    config = {
+        "detection_file": sample_csv_result,
+        "filename_format": "%Y_%m_%d_%H_%M_%S",
+        "timebin_new": Timedelta(seconds=60),
+        "recording_file": recording_planning_csv,
+    }
+
+    obj = DataAplose.from_dict(config=config)
+
+    obj.detection_perf(
+        annotator=("ann1", "ann2"),
+        label=("lbl1", "lbl2"),
+    )
 
 # %% Reshape
 
@@ -517,7 +535,7 @@ def test_detection_perf_multiple_timebins(sample_df: DataFrame) -> None:
             Timestamp("2024-12-31"),
             Timestamp("2024-01-01"),
             pytest.raises(
-                ValueError, match=r"Begin timestamp is not anterior than end timestamp."
+                ValueError, match=r"Begin timestamp is not anterior than end timestamp.",
             ),
             id="begin_after_end_inverted_range",
         ),
@@ -681,3 +699,66 @@ def test_get_locator_from_offset(monkeypatch) -> None:
 def test_get_locator_from_offset_unsupported() -> None:
     with pytest.raises(ValueError, match="Unsupported offset type"):
         _get_locator_from_offset(3.14)
+
+# %% polar
+
+
+def test_polar_plot(sample_csv_result: Path, polar_ax: Axes) -> None:
+    config = {
+        "detection_file": sample_csv_result,
+        "filename_format": "%Y_%m_%d_%H_%M_%S",
+        "timebin_new": Timedelta(seconds=60),
+    }
+
+    obj = DataAplose.from_dict(config=config)
+
+    obj.plot_polar(
+        annotator="ann1",
+        label="lbl1",
+        ax=polar_ax,
+    )
+
+# %% scatter
+
+
+def test_scatter_plot(sample_csv_result: Path, recording_planning_csv: Path) -> None:
+    config = {
+        "detection_file": sample_csv_result,
+        "filename_format": "%Y_%m_%d_%H_%M_%S",
+        "timebin_new": Timedelta(seconds=60),
+        "recording_file": recording_planning_csv,
+    }
+
+    obj = DataAplose.from_dict(config=config)
+    _, ax = plt.subplots()
+
+    obj.plot_scatter(
+        annotator="ann1",
+        label="lbl1",
+        ax=ax,
+        show_rise_set=True,
+        coordinates=(0, 0),
+        effort=True,
+        bin_size=Timedelta("1h"),
+    )
+
+# %% timeline
+
+
+def test_timeline_plot(sample_csv_result: Path) -> None:
+    config = {
+        "detection_file": sample_csv_result,
+        "filename_format": "%Y_%m_%d_%H_%M_%S",
+        "timebin_new": Timedelta(seconds=60),
+    }
+
+    obj = DataAplose.from_dict(config=config)
+    _, ax = plt.subplots()
+
+    obj.plot_timeline(
+        annotator="ann1",
+        label="lbl1",
+        ax=ax,
+        show_rise_set=True,
+        coordinates=(0, 0),
+    )

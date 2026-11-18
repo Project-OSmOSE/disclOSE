@@ -1,23 +1,22 @@
 from unittest.mock import patch
 
 import pytest
-from pandas import DataFrame, Series, date_range, Timestamp, Timedelta
+from pandas import DataFrame, Series, Timedelta, Timestamp, date_range
 
-from disclose.utils.metric import (
-    detection_perf,
-    _get_classification_timestamps,
-    _compute_confusion_matrix,
-    _prepare_annotator_vectors,
-    get_detection_timestamps,
-    _get_f_score,
-    _get_recall,
-    _get_precision,
-    _compute_scores,
-    _log_detection_results,
-)
 from disclose.utils.core import get_count
 from disclose.utils.filtering import get_annotators, get_labels
-
+from disclose.utils.metric import (
+    _compute_confusion_matrix,
+    _compute_scores,
+    _get_classification_timestamps,
+    _get_f_score,
+    _get_precision,
+    _get_recall,
+    _log_detection_results,
+    _prepare_annotator_vectors,
+    detection_perf,
+    get_detection_timestamps,
+)
 
 # %% _get_classification_timestamps
 

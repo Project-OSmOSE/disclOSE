@@ -1,25 +1,26 @@
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 import pytz
 from matplotlib.axes import Axes
-import matplotlib.dates as mdates
 from matplotlib.colors import to_rgba
-from pandas import DataFrame, Timedelta, Timestamp, date_range, DatetimeIndex
+from pandas import DataFrame, DatetimeIndex, Timedelta, Timestamp, date_range, to_datetime
 from pandas.tseries import frequencies
 
+from disclose.utils.filtering import get_timezone
 from disclose.utils.visualisation import (
-    _wrap_xtick_labels,
-    get_legend,
-    overview,
-    set_y_axis_to_percentage,
-    arc,
-    polar,
-    histo,
     _prepare_timeline_plot,
-    scatter,
-    timeline,
+    _wrap_xtick_labels,
+    arc,
+    get_legend,
     heatmap,
+    histo,
+    overview,
+    polar,
+    scatter,
+    set_y_axis_to_percentage,
+    timeline, add_sunrise_sunset,
 )
 
 
@@ -117,14 +118,6 @@ def test_lists_and_strings_combined():
     assert result == expected
 
 # %% polar plot
-
-@pytest.fixture
-def polar_ax() -> Axes:
-    """Polar axes, closed after the test."""
-    _, ax = plt.subplots(subplot_kw={"projection": "polar"})
-    yield ax
-    plt.close("all")
-
 
 @pytest.mark.parametrize(
     ("h0", "h1"),
@@ -278,6 +271,7 @@ def test_polar_without_rise_set_draws_no_arcs(
 
 # %% histo
 
+
 @pytest.fixture
 def df_counts() -> DataFrame:
     idx = date_range("2025-01-01", periods=5, freq="1D", tz="UTC")
@@ -302,7 +296,7 @@ def test_histo_labels_and_bars(ax: Axes, df_counts: DataFrame) -> None:
 
 
 def test_histo_not_enough_data(
-    ax: Axes, df_counts: DataFrame, caplog: pytest.LogCaptureFixture
+    ax: Axes, df_counts: DataFrame, caplog: pytest.LogCaptureFixture,
 ) -> None:
     with caplog.at_level("WARNING"):
         histo(
@@ -320,7 +314,7 @@ def test_histo_not_enough_data(
 # %% _prepare_timeline_plot
 
 def test_prepare_timeline_plot_axes(
-    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex
+    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex,
 ) -> None:
     _prepare_timeline_plot(
         df_ann1_lbl1,
@@ -335,26 +329,6 @@ def test_prepare_timeline_plot_axes(
     assert ax.get_ylim() == (0, 24)
     assert ax.get_ylabel() == "Hour"
     assert ax.get_title() == "annotator: ann1\nlabel: lbl1"
-
-
-def test_prepare_timeline_plot_asks_for_missing_coordinates(
-    monkeypatch: pytest.MonkeyPatch,
-    ax: Axes,
-    df_ann1_lbl1: DataFrame,
-    time_range: DatetimeIndex,
-) -> None:
-    called = []
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.get_coordinates",
-        lambda: called.append(True) or (48.39, -4.49),
-    )
-
-    _prepare_timeline_plot(
-        df_ann1_lbl1, ax, bins=time_range, coordinates=(None, None),
-    )
-
-    assert called
-
 
 def test_prepare_timeline_plot_rise_set(
     monkeypatch: pytest.MonkeyPatch,
@@ -400,11 +374,25 @@ def test_prepare_timeline_plot_several_timezones(
         )
 
 
+def test_prepare_timeline_plot_missing_coordinates(
+    monkeypatch: pytest.MonkeyPatch,
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
+) -> None:
+    with pytest.raises(ValueError, match=r"coordinates must be provided"):
+        _prepare_timeline_plot(
+            df_ann1_lbl1,
+            ax,
+            bins=time_range,
+            coordinates=(None, None),
+            show_rise_set=True,
+        )
 # %% scatter
 
 
 def test_scatter_points_and_legend(
-    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex
+    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex,
 ) -> None:
     scatter(df_ann1_lbl1, ax, time_range, coordinates=(0, 0))
 
@@ -418,7 +406,7 @@ def test_scatter_points_and_legend(
 
 
 def test_heatmap_counts_all_detections(
-    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex
+    ax: Axes, df_ann1_lbl1: DataFrame, time_range: DatetimeIndex,
 ) -> None:
     heatmap(
         df_ann1_lbl1,
@@ -459,3 +447,31 @@ def test_timeline_custom_colors(ax: Axes, sample_df: DataFrame) -> None:
 
     assert ax.collections[0].get_facecolor()[0].tolist() == list(to_rgba("red"))
     assert ax.collections[1].get_facecolor()[0].tolist() == list(to_rgba("blue"))
+
+# %% add_sunrise_sunset
+
+def test_add_sunrise_sunset(sample_df: DataFrame):
+    fig, ax = plt.subplots()
+
+    try:
+        _prepare_timeline_plot(
+            df=sample_df,
+            ax=ax,
+            bins=date_range(start=min(sample_df["start_datetime"]), end=max(sample_df["end_datetime"]), freq=Timedelta("1min")),
+            show_rise_set=True,
+            coordinates=(40, -4),
+        )
+
+        lines = ax.get_lines()
+        assert lines[-2].get_label() == "Sunrise"
+        assert lines[-2].get_color() == "darkorange"
+        assert lines[-1].get_label() == "Sunset"
+        assert lines[-1].get_color() == "royalblue"
+
+        assert ax.get_legend() is not None
+        assert [text.get_text() for text in ax.get_legend().get_texts()][-2:] == [
+            "Sunrise",
+            "Sunset",
+        ]
+    finally:
+        plt.close(fig)

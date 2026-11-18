@@ -20,15 +20,14 @@ from pandas import (
     Timedelta,
     Timestamp,
     concat,
-    date_range,
     crosstab,
+    date_range,
 )
 from pandas.tseries import frequencies
 from scipy.stats import pearsonr
 
 from disclose.utils.core import (
     add_season_period,
-    get_coordinates,
     get_labels_and_annotators,
     get_sun_times,
     get_time_range_and_bin_size,
@@ -98,7 +97,7 @@ def histo(
             f" do not contains enough detections."
         )
         logging.warning(msg)
-        return
+        return None
 
     legend = plot_kwargs.get("legend", False)
     color = plot_kwargs.get("color")
@@ -300,7 +299,8 @@ def _prepare_timeline_plot(
     """
     lat, lon = coordinates
     if lat is None or lon is None:
-        lat, lon = get_coordinates()
+        msg = "``lat` and `lon` coordinates must be provided"
+        raise ValueError(msg)
 
     begin = bins[0]
     end = bins[-1]
@@ -445,7 +445,7 @@ def heatmap(
     show_rise_set = kwargs.get("show_rise_set", False)
     season = kwargs.get("season", False)
     coordinates = kwargs.get("coordinates", False)
-    effort = kwargs.get("effort", None)
+    effort = kwargs.get("effort")
 
     begin = time_range[0]
     end = time_range[-1]
@@ -528,13 +528,13 @@ def overview(df: DataFrame, annotator: str | list[str]) -> None:
     df = filter_by_annotator(df, annotator)
 
     summary_label = (
-        df.groupby("label")["annotator"]  # noqa: PD010
+        df.groupby("label")["annotator"]  # ruff: ignore[pandas-use-of-dot-pivot-or-unstack]
         .apply(Counter)
         .unstack(fill_value=0)
     )
 
     summary_annotator = (
-        df.groupby("annotator")["label"]  # noqa: PD010
+        df.groupby("annotator")["label"]  # ruff: ignore[pandas-use-of-dot-pivot-or-unstack]
         .apply(Counter)
         .unstack(fill_value=0)
     )

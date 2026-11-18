@@ -66,7 +66,7 @@ def process_binary(
     filter_obj = Filters(
         {
             "daterange": DateFilter(
-                start_date=audio.begin, end_date=audio.end, ordered=True
+                start_date=audio.begin, end_date=audio.end, ordered=True,
             ),
         },
     )

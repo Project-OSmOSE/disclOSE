@@ -36,7 +36,7 @@ from disclose.utils.filtering import (
     get_dataset,
     get_labels,
     get_timezone,
-    load_detections,
+    load_detections, get_max_time,
 )
 from disclose.utils.metric import detection_perf
 from disclose.utils.visualisation import (
@@ -257,8 +257,6 @@ class DataAplose:
         cls,
         datasets: list[DataAplose],
     ) -> DataAplose:
-        if not datasets:
-            return cls()
 
         df = (
             concat(
@@ -456,11 +454,9 @@ class DataAplose:
 
         return ax
 
-    def overview(self, annotator: str | list[str] | None = None) -> None:
+    def overview(self, annotator: str | list[str]) -> None:
         """Overview of an APLOSE formatted DataFrame."""
-        if not annotator:
-            annotator = self.annotator
-        overview(self.df, annotator)
+        overview(df=self.df, annotator=annotator)
 
     def detection_perf(
         self,
@@ -491,10 +487,7 @@ class DataAplose:
             annotator,
             label,
         )
-        if isinstance(annotator, str):
-            annotator = [annotator]
-        if isinstance(label, str):
-            label = [label]
+
         ref = (annotator[0], label[0])
 
         if len(set(df_filtered["end_time"])) > 1:
@@ -502,8 +495,7 @@ class DataAplose:
             raise ValueError(msg)
         timebin = Timedelta(df_filtered["end_time"].iloc[0], "s")
 
-        if self.config.recording_file:
-            effort = RecordingPeriod.from_config(config=self.config, bin_size=timebin)
+        effort = RecordingPeriod.from_config(config=self.config, bin_size=timebin) if self.config.recording_file else None
 
         return detection_perf(
             df=df_filtered,
@@ -551,9 +543,9 @@ class DataAplose:
         df_counts = get_count(df_filtered, bin_size)
         detection_size = Timedelta(max(df_filtered["end_time"]), "s")
         plot_kwargs["coordinates"] = (self.lat, None)
-        if plot_kwargs.get("effort", None):
+        if plot_kwargs.get("effort"):
             plot_kwargs["effort"] = RecordingPeriod.from_config(
-                config=self.config, bin_size=bin_size
+                config=self.config, bin_size=bin_size,
             )
         return histo(
             df=df_counts,
@@ -602,8 +594,8 @@ class DataAplose:
 
     def plot_scatter(self, annotator: str | list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
         df_filtered = self.filter_df(annotator, label)
-        coordinates = self.coordinates
-        bin_size = kwargs.get("bin_size")
+        coordinates = kwargs.get("coordinates") or self.coordinates
+        bin_size = kwargs.get("bin_size") or get_max_time(self.df)
         season = kwargs.get("season")
         effort = kwargs.get("effort", False)
         if effort:
@@ -628,8 +620,6 @@ class DataAplose:
             label,
         )
         kwargs["coordinates"] = self.coordinates
-        # if effort:
-        #     effort = RecordingPeriod.from_config(config=self.config, bin_size=bin_size)
         timeline(df=df_filtered, ax=ax, **kwargs)
 
     def plot_agreement(self, annotator: list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:

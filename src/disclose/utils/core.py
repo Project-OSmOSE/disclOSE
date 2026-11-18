@@ -12,17 +12,16 @@ from matplotlib.axes import Axes
 from pandas import (
     DataFrame,
     DatetimeIndex,
+    Series,
     Timedelta,
     Timestamp,
     cut,
     date_range,
     json_normalize,
     to_datetime,
-    Series,
 )
 from pandas.tseries import offsets
 from pandas.tseries.offsets import BaseOffset
-
 
 if TYPE_CHECKING:
     from datetime import tzinfo
@@ -146,52 +145,6 @@ def get_sun_times(
     return h_sunrise, h_sunset
 
 
-def get_coordinates() -> tuple:
-    """Ask for user input to get GPS coordinates."""
-    title = "Coordinates in degree° minute'"
-    msg = "latitude (N/S) and longitude (E/W)"
-    field_names = ["lat decimal degree", "lon decimal degree"]
-    field_values = easygui.multenterbox(msg, title, field_names)
-
-    max_lat = 90
-    max_lon = 180
-
-    while True:
-        if field_values is None:
-            msg = "'get_coordinates()' was cancelled"
-            raise TypeError(msg)
-
-        lat, lon = field_values
-        errmsg = ""
-        try:
-            lat_val = float(lat.strip())  # Convert to float for latitude
-            if lat_val < -max_lat or lat_val > max_lat:
-                errmsg += (
-                    f"'{lat}' is not a valid latitude. It must be between -90 and 90.\n"
-                )
-        except ValueError:
-            errmsg += f"'lat', invalid entry: '{lat}'.\n"
-
-        try:
-            lon_val = float(lon.strip())  # Convert to float for longitude
-            if lon_val < -max_lon or lon_val > max_lon:
-                errmsg += (
-                    f"'lon', invalid entry: '{lon}'. It must be between -180 and 180.\n"
-                )
-        except ValueError:
-            errmsg += f"'lon', invalid entry: '{lon}'.\n"
-
-        if errmsg == "":
-            break
-
-        field_values = easygui.multenterbox(errmsg, title, field_names)
-
-    lat = float(lat.strip())
-    lon = float(lon.strip())
-
-    return lat, lon
-
-
 def json2df(json_path: Path) -> DataFrame:
     """Convert a metadatax JSON file into a DataFrame.
 
@@ -272,8 +225,6 @@ def add_season_period(
 
     ymin, _ = ax.get_ylim()
     ax.set_ylim(ymin, ax.dataLim.ymax)
-
-
 
 
 def set_bar_height(ax: plt.Axes, pixel_height: int = 10) -> float:
