@@ -464,9 +464,9 @@ def test_data_aplose_overview(sample_data_aplose: DataAplose) -> None:
         DataFrame(
             {
                 "annotator": ["ann1", "ann2", "ann3", "ann4", "ann5", "ann6"],
-                "lbl1": [7, 7, 0, 0, 14, 2],
-                "lbl2": [17, 15, 14, 11, 11, 7],
-                "lbl3": [0, 0, 0, 0, 2, 0],
+                "lbl1": [2, 2, 0, 0, 2, 1],
+                "lbl2": [2, 2, 2, 2, 1, 1],
+                "lbl3": [0, 0, 0, 0, 1, 0],
             },
         )
         .set_index("annotator")
