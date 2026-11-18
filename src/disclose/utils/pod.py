@@ -204,7 +204,7 @@ def get_feeding_buzz_datetime(row: Series) -> Timestamp:
 
     try:
         return strptime_from_text(row["Minute"], "%-d/%-m/%Y %H:%M") + Timedelta(
-            microseconds=row["microsec"]
+            microseconds=row["microsec"],
         )
     except (KeyError, TypeError, ValueError) as e:
         exceptions.append(e)
@@ -371,7 +371,7 @@ def gmm_feeding_buzz(df: DataFrame, comp: int) -> DataFrame:
 
     df_buzz = df.groupby("start_datetime")["Buzz"].sum().reset_index()
     df_buzz["fbm_count"] = to_numeric(df_buzz["Buzz"] != 0, downcast="integer").astype(
-        int
+        int,
     )
     return df_buzz
 
@@ -580,9 +580,9 @@ def calendar(
         ]
 
         data.loc[
-            mask & (data["end_recording"] > data["end_deployment"]), "end_recording"
+            mask & (data["end_recording"] > data["end_deployment"]), "end_recording",
         ] = data.loc[
-            mask & (data["end_recording"] > data["end_deployment"]), "end_deployment"
+            mask & (data["end_recording"] > data["end_deployment"]), "end_deployment",
         ]
 
         data.loc[
@@ -673,7 +673,7 @@ def _shade_missing_bars(
             start = i
         elif not is_missing and start is not None:
             ax.axvspan(
-                pos[start] - 0.5, pos[i - 1] + 0.5, color=color, alpha=alpha, zorder=0
+                pos[start] - 0.5, pos[i - 1] + 0.5, color=color, alpha=alpha, zorder=0,
             )
             start = None
     if start is not None:

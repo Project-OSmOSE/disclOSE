@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from pandas import (
     NA,
     DataFrame,
@@ -34,6 +35,7 @@ from disclose.utils.filtering import (
     get_annotators,
     get_dataset,
     get_labels,
+    get_max_time,
     get_timezone,
     load_detections,
 )
@@ -112,7 +114,7 @@ def empty_dataframe() -> DataFrame:
     return DataFrame(columns=Series(APLOSE_COLUMNS))
 
 
-@dataclass
+@dataclass  # ruff: ignore[too-many-public-methods]
 class DataAplose:
     """A class to handle APLOSE formatted data."""
 
@@ -256,8 +258,6 @@ class DataAplose:
         cls,
         datasets: list[DataAplose],
     ) -> DataAplose:
-        if not datasets:
-            return cls()
 
         df = (
             concat(
@@ -420,10 +420,10 @@ class DataAplose:
 
     def set_ax(
         self,
-        ax: plt.Axes,
+        ax: Axes,
         x_ticks_res: Timedelta | offsets.BaseOffset,
         date_format: str,
-    ) -> plt.Axes:
+    ) -> Axes:
         """Configure a Matplotlib axis for time-based plot.
 
         Sets up x-axis with appropriate limits, tick spacing,
@@ -455,11 +455,9 @@ class DataAplose:
 
         return ax
 
-    def overview(self, annotator: str | list[str] | None = None) -> None:
+    def overview(self, annotator: str | list[str]) -> None:
         """Overview of an APLOSE formatted DataFrame."""
-        if not annotator:
-            annotator = self.annotator
-        overview(self.df, annotator)
+        overview(df=self.df, annotator=annotator)
 
     def detection_perf(
         self,
@@ -490,10 +488,7 @@ class DataAplose:
             annotator,
             label,
         )
-        if isinstance(annotator, str):
-            annotator = [annotator]
-        if isinstance(label, str):
-            label = [label]
+
         ref = (annotator[0], label[0])
 
         if len(set(df_filtered["end_time"])) > 1:
@@ -501,8 +496,7 @@ class DataAplose:
             raise ValueError(msg)
         timebin = Timedelta(df_filtered["end_time"].iloc[0], "s")
 
-        if self.config.recording_file:
-            effort = RecordingPeriod.from_config(config=self.config, bin_size=timebin)
+        effort = RecordingPeriod.from_config(config=self.config, bin_size=timebin) if self.config.recording_file else None
 
         return detection_perf(
             df=df_filtered,
@@ -511,146 +505,136 @@ class DataAplose:
             effort=effort,
         )
 
-    def plot(
+    def plot_histogram(
         self,
-        mode: str,
-        ax: plt.Axes,
-        *,
+        ax: Axes,
         annotator: str | list[str],
         label: str | list[str],
-        **kwargs: bool | Timedelta | BaseOffset | str | list[str] | RecordingPeriod,
-    ) -> Any:
-        """Plot filtered data using the specified mode.
-
-        Supports multiple plot types depending on the mode:
-          - "histogram": Plot a histogram of data.
-          - "scatter" / "heatmap": Map hourly detections on a timeline.
-          - "agreement": Plot inter-annotator agreement regression.
-          - "timeline": Plot a timeline of data.
-          - "polar": Polar plot of detections throughout the hours of the day.
+        bin_size: Timedelta | BaseOffset,
+        **plot_kwargs: bool | str | list[str],
+    ) -> Axes:
+        """Plot a histogram of data.
 
         Parameters
         ----------
-        mode: str
-            Type of plot to generate.
-            Must be one of {"histogram", "scatter", "heatmap", "agreement", "polar"}.
-        ax: plt.Axes
+        ax: Axes
             Matplotlib Axes object to plot on.
         annotator: str | list[str]
             The selected annotator or list of annotators.
         label: str | list[str]
             The selected label or list of labels.
-        **kwargs: Additional keyword arguments depending on the mode.
+        bin_size: Timedelta | BaseOffset
+            Bars width
+        **plot_kwargs: Any
+            Additional keyword arguments for optional plot parameters.
             - legend: bool
                 Whether to show the legend.
             - season: bool
                 Whether to show the season.
-            - show_rise_set: bool
-                Whether to show sunrise and sunset times.
             - color: str | list[str]
                 Color(s) for the bars.
-            - bin_size: Timedelta | BaseOffset
-                Bin size for the histogram.
             - effort: bool
                 The timestamp intervals corresponding to the observation effort.
-                If provided by the `recording_file` argument, data will be normalized by observation effort.
+                If provided by the `recording_file` argument,
+                data will be normalized by observation effort.
 
         """
+        df_filtered = self.filter_df(annotator, label)
+        ax.set_xlim(self.start_datetime, self.end_datetime)
+        df_counts = get_count(df_filtered, bin_size)
+        detection_size = Timedelta(max(df_filtered["end_time"]), "s")
+        plot_kwargs["coordinates"] = (self.lat, None)
+        if plot_kwargs.get("effort"):
+            plot_kwargs["effort"] = RecordingPeriod.from_config(
+                config=self.config, bin_size=bin_size,
+            )
+        return histo(
+            df=df_counts,
+            ax=ax,
+            bin_size=bin_size,
+            time_bin=detection_size,
+            **plot_kwargs,
+        )
+
+    def plot_polar(
+        self,
+        ax: Axes,
+        annotator: str | list[str],
+        label: str | list[str],
+        **plot_kwargs: Any,
+    ) -> Axes:
+        plot_kwargs["coordinates"] = (self.lat, self.lon)
+        df_filtered = self.filter_df(annotator, label)
+        return polar(
+            df=df_filtered,
+            ax=ax,
+            **plot_kwargs,
+        )
+
+    def plot_heatmap(self, annotator: str | list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
+        df_filtered = self.filter_df(annotator, label)
+        dates = date_range(self.start_datetime, self.end_datetime)
+        coordinates = self.coordinates
+        bin_size = kwargs.get("bin_size")
+        season = kwargs.get("season")
+        effort = kwargs.get("effort", False)
+        if effort:
+            effort = RecordingPeriod.from_config(config=self.config, bin_size=bin_size)
+        show_rise_set = kwargs.get("show_rise_set", True)
+        ax.set_xlim(self.start_datetime, self.end_datetime)
+        return heatmap(
+            df=df_filtered,
+            ax=ax,
+            bin_size=bin_size,
+            time_range=dates,
+            show_rise_set=show_rise_set,
+            season=season,
+            effort=effort,
+            coordinates=coordinates,
+        )
+
+    def plot_scatter(self, annotator: str | list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
+        df_filtered = self.filter_df(annotator, label)
+        coordinates = kwargs.get("coordinates") or self.coordinates
+        bin_size = kwargs.get("bin_size") or get_max_time(self.df)
+        season = kwargs.get("season")
+        effort = kwargs.get("effort", False)
+        if effort:
+            effort = RecordingPeriod.from_config(config=self.config, bin_size=bin_size)
+        dates = date_range(start=self.start_datetime, end=self.end_datetime, freq=bin_size)
+        show_rise_set = kwargs.get("show_rise_set", True)
+        ax.set_xlim(self.start_datetime, self.end_datetime)
+        return scatter(
+            df=df_filtered,
+            ax=ax,
+            time_range=dates,
+            show_rise_set=show_rise_set,
+            season=season,
+            coordinates=coordinates,
+            effort=effort,
+        )
+
+    def plot_timeline(self, annotator: str | list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
+        ax.set_xlim(self.start_datetime, self.end_datetime)
         df_filtered = self.filter_df(
             annotator,
             label,
         )
+        kwargs["coordinates"] = self.coordinates
+        timeline(df=df_filtered, ax=ax, **kwargs)
 
-        dates = date_range(self.start_datetime, self.end_datetime)
-
+    def plot_agreement(self, annotator: list[str], label: str | list[str], ax: Axes, **kwargs: Any) -> Axes:
+        df_filtered = self.filter_df(
+            annotator,
+            label,
+        )
         bin_size = kwargs.get("bin_size")
-        legend = kwargs.get("legend", True)
-        color = kwargs.get("color")
-        season = kwargs.get("season")
-        effort = kwargs.get("effort", False)
-        show_rise_set = kwargs.get("show_rise_set", True)
-
-        if effort:
-            effort = RecordingPeriod.from_config(config=self.config, bin_size=bin_size)
-
-        if mode == "histogram":
-            ax.set_xlim(self.start_datetime, self.end_datetime)
-            if not bin_size:
-                msg = "'bin_size' missing for histogram plot."
-                raise ValueError(msg)
-            df_counts = get_count(df_filtered, bin_size)
-            detection_size = Timedelta(max(df_filtered["end_time"]), "s")
-            histo(
-                df=df_counts,
-                ax=ax,
-                bin_size=bin_size,
-                time_bin=detection_size,
-                legend=legend,
-                color=color,
-                season=season,
-                effort=effort,
-                coordinates=(self.lat, self.lon),
-            )
-            return None
-
-        if mode == "heatmap":
-            ax.set_xlim(self.start_datetime, self.end_datetime)
-            heatmap(
-                df=df_filtered,
-                ax=ax,
-                bin_size=bin_size,
-                time_range=dates,
-                show_rise_set=show_rise_set,
-                season=season,
-                effort=effort,
-                coordinates=self.coordinates,
-            )
-            return None
-
-        if mode == "polar":
-            if ax.name != "polar":
-                msg = "Provided ax must have a polar projection."
-                raise ValueError(msg)
-            return polar(
-                df=df_filtered,
-                ax=ax,
-                coordinates=self.coordinates,
-                **kwargs,
-            )
-
-        if mode == "scatter":
-            ax.set_xlim(self.start_datetime, self.end_datetime)
-            scatter(
-                df=df_filtered,
-                ax=ax,
-                time_range=dates,
-                show_rise_set=show_rise_set,
-                season=season,
-                coordinates=self.coordinates,
-                effort=effort,
-            )
-            return None
-
-        if mode == "agreement":
-            if not bin_size:
-                msg = "'bin_size' missing for agreement plot."
-                raise ValueError(msg)
-            df_counts = get_count(df_filtered, bin_size)
-            plot_annotator_agreement(df=df_counts, bin_size=bin_size, ax=ax)
-            return None
-
-        if mode == "timeline":
-            ax.set_xlim(self.start_datetime, self.end_datetime)
-            color = kwargs.get("color")
-            df_filtered = self.filter_df(
-                annotator,
-                label,
-            )
-            timeline(df=df_filtered, ax=ax, color=color)
-            return None
-
-        msg = f"Unsupported plot mode: {mode}"
-        raise ValueError(msg)
+        if not bin_size:
+            msg = "'bin_size' missing for agreement plot."
+            raise ValueError(msg)
+        df_counts = get_count(df_filtered, bin_size)
+        plot_annotator_agreement(df=df_counts, ax=ax)
+        return ax
 
     def add_dpm(self) -> None:
         """Add the detection per minute `DPM` column to DataFrame."""

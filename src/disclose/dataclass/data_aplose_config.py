@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pandas import Timedelta, Timestamp
 
-from disclose.utils.filtering import read_dataframe, get_max_time
+from disclose.utils.filtering import get_max_time, read_dataframe
 
 
 @dataclass(slots=True)
@@ -74,7 +74,6 @@ class DataAploseConfig:
         config: dict | list[dict],
     ) -> DataAploseConfig | list[DataAploseConfig]:
         """Build one or more configuration objects from dictionaries."""
-
         if isinstance(config, dict):
             return cls(**config)
 
@@ -83,7 +82,6 @@ class DataAploseConfig:
     @classmethod
     def merge(cls, configs: list[DataAploseConfig]) -> DataAploseConfig:
         """Merge several configurations."""
-
         if not configs:
             return cls.empty()
 
