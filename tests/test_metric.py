@@ -30,10 +30,10 @@ def test_get_classification_timestamps():
     result = _get_classification_timestamps(vec1, vec2)
 
     assert result == {
-        "true_pos": [timestamps[0], timestamps[6], timestamps[7]],
-        "false_pos": [timestamps[1], timestamps[5]],
-        "false_neg": [timestamps[2]],
-        "true_neg": [timestamps[3], timestamps[8]],
+        "true_positive": [timestamps[0], timestamps[6], timestamps[7]],
+        "false_positive": [timestamps[1], timestamps[5]],
+        "false_negative": [timestamps[2]],
+        "true_negative": [timestamps[3], timestamps[8]],
         "error": [timestamps[4], timestamps[-1]],
     }
 
@@ -43,34 +43,34 @@ def test_get_classification_timestamps():
 
 def test_compute_confusion_matrix():
     timestamps = {
-        "true_pos": [
+        "true_positive": [
             Timestamp("2024-01-01"),
             Timestamp("2024-01-02"),
             Timestamp("2024-01-03"),
         ],
-        "false_pos": [Timestamp("2024-01-04"), Timestamp("2024-01-05")],
-        "false_neg": [Timestamp("2024-01-06")],
-        "true_neg": [Timestamp("2024-01-07"), Timestamp("2024-01-08")],
+        "false_positive": [Timestamp("2024-01-04"), Timestamp("2024-01-05")],
+        "false_negative": [Timestamp("2024-01-06")],
+        "true_negative": [Timestamp("2024-01-07"), Timestamp("2024-01-08")],
         "error": [],
     }
 
     result = _compute_confusion_matrix(timestamps)
 
     assert result == {
-        "true_pos": 3,
-        "false_pos": 2,
-        "false_neg": 1,
-        "true_neg": 2,
+        "true_positive": 3,
+        "false_positive": 2,
+        "false_negative": 1,
+        "true_negative": 2,
         "error": 0,
     }
 
 
 def test_compute_confusion_matrix_raises_on_errors():
     timestamps = {
-        "true_pos": [Timestamp("2024-01-01")],
-        "false_pos": [],
-        "false_neg": [Timestamp("2024-01-02")],
-        "true_neg": [],
+        "true_positive": [Timestamp("2024-01-01")],
+        "false_positive": [],
+        "false_negative": [Timestamp("2024-01-02")],
+        "true_negative": [],
         "error": [Timestamp("2024-01-03")],
     }
 
@@ -80,10 +80,10 @@ def test_compute_confusion_matrix_raises_on_errors():
 
 def test_compute_confusion_matrix_raises_when_precision_impossible():
     timestamps = {
-        "true_pos": [],
-        "false_pos": [],
-        "false_neg": [Timestamp("2024-01-01")],
-        "true_neg": [Timestamp("2024-01-02")],
+        "true_positive": [],
+        "false_positive": [],
+        "false_negative": [Timestamp("2024-01-01")],
+        "true_negative": [Timestamp("2024-01-02")],
         "error": [],
     }
 
@@ -93,10 +93,10 @@ def test_compute_confusion_matrix_raises_when_precision_impossible():
 
 def test_compute_confusion_matrix_raises_when_recall_impossible():
     timestamps = {
-        "true_pos": [],
-        "false_pos": [Timestamp("2024-01-01")],
-        "false_neg": [],
-        "true_neg": [Timestamp("2024-01-02")],
+        "true_positive": [],
+        "false_positive": [Timestamp("2024-01-01")],
+        "false_negative": [],
+        "true_negative": [Timestamp("2024-01-02")],
         "error": [],
     }
 
@@ -172,10 +172,10 @@ def test_get_detection_timestamps(sample_df: DataFrame):
     )
 
     assert set(timestamps) == {
-        "true_pos",
-        "false_pos",
-        "false_neg",
-        "true_neg",
+        "true_positive",
+        "false_positive",
+        "false_negative",
+        "true_negative",
         "error",
     }
 
@@ -191,10 +191,10 @@ def test_get_detection_timestamps(sample_df: DataFrame):
 
 def test_get_precision():
     confusion_matrix = {
-        "true_pos": 8,
-        "false_pos": 2,
-        "false_neg": 4,
-        "true_neg": 10,
+        "true_positive": 8,
+        "false_positive": 2,
+        "false_negative": 4,
+        "true_negative": 10,
         "error": 0,
     }
 
@@ -203,10 +203,10 @@ def test_get_precision():
 
 def test_get_recall():
     confusion_matrix = {
-        "true_pos": 8,
-        "false_pos": 2,
-        "false_neg": 4,
-        "true_neg": 10,
+        "true_positive": 8,
+        "false_positive": 2,
+        "false_negative": 4,
+        "true_negative": 10,
         "error": 0,
     }
 
@@ -215,10 +215,10 @@ def test_get_recall():
 
 def test_get_f_score():
     confusion_matrix = {
-        "true_pos": 8,
-        "false_pos": 2,
-        "false_neg": 4,
-        "true_neg": 10,
+        "true_positive": 8,
+        "false_positive": 2,
+        "false_negative": 4,
+        "true_negative": 10,
         "error": 0,
     }
 
@@ -234,10 +234,10 @@ def test_get_f_score():
 
 def test_compute_scores():
     confusion_matrix = {
-        "true_pos": 8,
-        "false_pos": 2,
-        "false_neg": 4,
-        "true_neg": 10,
+        "true_positive": 8,
+        "false_positive": 2,
+        "false_negative": 4,
+        "true_negative": 10,
         "error": 0,
     }
 
@@ -253,10 +253,10 @@ def test_compute_scores():
 
 def test_log_detection_results(sample_df: DataFrame):
     matrix = {
-        "true_pos": 8,
-        "false_pos": 2,
-        "false_neg": 4,
-        "true_neg": 10,
+        "true_positive": 8,
+        "false_positive": 2,
+        "false_negative": 4,
+        "true_negative": 10,
         "error": 0,
     }
 
@@ -302,21 +302,48 @@ def test_detection_perf(sample_df: DataFrame):
     )
 
     assert set(classification) == {
-        "true_pos",
-        "false_pos",
-        "false_neg",
-        "true_neg",
+        "true_positive",
+        "false_positive",
+        "false_negative",
+        "true_negative",
         "error",
     }
 
     assert confusion_matrix == {
-        "true_pos": len(classification["true_pos"]),
-        "false_pos": len(classification["false_pos"]),
-        "false_neg": len(classification["false_neg"]),
-        "true_neg": len(classification["true_neg"]),
+        "true_positive": len(classification["true_positive"]),
+        "false_positive": len(classification["false_positive"]),
+        "false_negative": len(classification["false_negative"]),
+        "true_negative": len(classification["true_negative"]),
         "error": len(classification["error"]),
     }
 
     assert score[0] == 1
     assert score[1] == 1
     assert score[2] == 1
+
+
+@pytest.mark.parametrize(
+    ("func", "matrix"),
+    [
+        (
+            _get_precision,
+            {"true_positive": 0, "false_positive": 0, "false_negative": 3},
+        ),
+        (_get_recall, {"true_positive": 0, "false_positive": 3, "false_negative": 0}),
+        (_get_f_score, {"true_positive": 0, "false_positive": 2, "false_negative": 3}),
+    ],
+)
+def test_scores_without_true_positiveitive_do_not_divide_by_zero(func, matrix) -> None:
+    assert func(matrix) == 0.0
+
+
+def test_compute_scores_is_named_tuple() -> None:
+    scores = _compute_scores({
+        "true_positive": 8,
+        "false_positive": 2,
+        "false_negative": 4,
+    })
+
+    assert scores.precision == scores[0] == 0.8
+    assert scores.recall == scores[1] == pytest.approx(8 / 12)
+    assert scores.f_score == scores[2]

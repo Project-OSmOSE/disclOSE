@@ -11,7 +11,6 @@ requires-python = ">=3.12"
 dependencies = [
     "osekit>=1.4.0",
     "astral >=3.2",
-    "easygui >=0.98.3",
     "matplotlib>=3.11.2",
     "numpy>=2.5.4",
     "pandas>=3.1.1",
@@ -19,12 +18,9 @@ dependencies = [
     "pytz>=2026.6",
     "pyyaml >=6.0.2",
     "scipy>=1.18.1",
-    "seaborn >=0.12.2",
     "soundfile >=0.12.1",
     "tqdm>=4.70.1",
     "gpxpy >=1.6.2",
-    "notebook>=7.6.5",
-    "ipykernel>=7.4.0",
     "scikit-learn>=1.9.1",
 ]
 
@@ -33,8 +29,9 @@ dev = [
     "pytest",
     "myst-nb>=1.3.0",
     "notebook>=7.6.5",
+    "ipykernel>=7.4.0",
     "setuptools<84.3",
-    "ruff>=0.17.5",
+    "ruff>=0.17.5,<0.18",
     "sphinx>=9.1.1",
     "sphinx-book-theme>=1.1.4",
     "sphinx-copybutton>=0.5.2",
@@ -42,6 +39,21 @@ dev = [
     "pre-commit>=4.7.0",
     "coveralls>=4.1.0",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/disclose"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning:disclose.*"]
+
+[tool.coverage.run]
+source = ["disclose"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
 
 [tool.ruff.lint.flake8-copyright]
 author = "OSmOSE"
@@ -59,17 +71,17 @@ build-backend = "hatchling.build"
 
 [tool.ruff.lint.extend-per-file-ignores]
 "src/**/*.py" = [
-    "CPY001", # missing-copyright-notice, no copyright at top of file
-    "DOC201", # docstring-missing-returns, no return in function docstring
-    "DOC501", # docstring-missing-exception, no raised exceptions in docstring
+    "missing-copyright-notice", # missing-copyright-notice, no copyright at top of file
+    "docstring-missing-returns", # docstring-missing-returns, no return in function docstring
+    "docstring-missing-exception", # docstring-missing-exception, no raised exceptions in docstring
 ]
 
 "tests/**/*.py" = [
-    "S101",   # assert, asserts allowed in tests...
+    "assert",   # assert, asserts allowed in tests...
     "ARG",    # Unused function args -> fixtures nevertheless are functionally relevant...
     "FBT",    # Don't care about booleans as positional arguments in tests...
     "D",      # Docstring-related stuff
-    "SLF001", # private-member-access, Access to private variables
-    "BLE001", # blind-except, Blind exceptions
-    "PLR0913",# too-many-arguments, Too many arguments in methods
+    "private-member-access", # private-member-access, Access to private variables
+    "blind-except", # blind-except, Blind exceptions
+    "too-many-arguments",# too-many-arguments, Too many arguments in methods
 ]

@@ -1011,5 +1011,5 @@ class PlotAccessor:
             raise ValueError(msg)
         df_filtered = self._data.filter_df(annotator, label)
         return self._tight_layout(
-            plot_annotator_agreement(df=get_count(df_filtered, bin_size), ax=ax)
+            plot_annotator_agreement(df=get_count(df_filtered, bin_size), ax=ax),
         )

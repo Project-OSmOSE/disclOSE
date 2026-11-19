@@ -87,7 +87,8 @@ def test_recording_period_with_gaps(
 
 
 def test_no_recording_file_provided(
-    sample_csv_result: DataFrame, recording_planning_csv: DataFrame,
+    sample_csv_result: DataFrame,
+    recording_planning_csv: DataFrame,
 ) -> None:
     dict_test = {
         "detection_file": sample_csv_result,
@@ -101,7 +102,8 @@ def test_no_recording_file_provided(
 
 
 def test_no_recording_wrong_file(
-    sample_csv_result: DataFrame, recording_planning_csv: DataFrame,
+    sample_csv_result: DataFrame,
+    recording_planning_csv: DataFrame,
 ) -> None:
     dict_test = {
         "detection_file": sample_csv_result,
@@ -186,7 +188,9 @@ def test_recording_period_from_csv_missing_column(
 
 
 def test_recording_from_config_empty_file(
-    tmp_path: Path, sample_csv_result: DataFrame, recording_planning_csv: DataFrame,
+    tmp_path: Path,
+    sample_csv_result: DataFrame,
+    recording_planning_csv: DataFrame,
 ) -> None:
     empty_file = tmp_path / "recordings.csv"
     data = DataFrame(

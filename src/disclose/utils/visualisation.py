@@ -102,7 +102,7 @@ def histo(
     color = plot_kwargs.get("color")
     season = plot_kwargs.get("season", False)
     effort = plot_kwargs.get("effort")
-    lat, _ = plot_kwargs.get("coordinates")
+    lat, _ = plot_kwargs.get("coordinates") or (None, None)
 
     bin_size_str = get_bin_size_str(bin_size)
 
@@ -211,6 +211,9 @@ def polar(
     The axes and the mean proportion of detections for each hour of the day.
 
     """
+    if ax is None:
+        _, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(6, 6))
+
     if ax.name != "polar":
         msg = "Provided ax must have a polar projection."
         raise ValueError(msg)
@@ -237,9 +240,6 @@ def polar(
     # Proportion of bins with a detection per hour, averaged over days
     prop = counts / (Timedelta("1h") / bin_size)
     mean_prop = prop.mean(axis=0)
-
-    if ax is None:
-        _, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(6, 6))
 
     ax.bar(
         2 * np.pi * (mean_prop.index.values + 0.5) / 24,

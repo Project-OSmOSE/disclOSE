@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import pytz
-from pandas import DataFrame, Timedelta, Timestamp, concat, to_datetime
+from pandas import DataFrame, Series, Timedelta, Timestamp, concat, to_datetime
 
 from disclose.utils.filtering import (
     _normalize_timezones,
@@ -56,7 +56,8 @@ def test_find_delimiter_valid(
 
 
 def test_find_delimiter_invalid(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     file = tmp_path / "bad.csv"
     file.write_text("a,b,c")
@@ -393,7 +394,8 @@ def test_check_timestamp_none(sample_df):
 def test_check_timestamp_wrong_length(sample_df):
     timestamp_audio = sample_df["start_datetime"][:-2]
     with pytest.raises(
-        ValueError, match="`timestamp_wav` is not the same length as `df`",
+        ValueError,
+        match="`timestamp_wav` is not the same length as `df`",
     ):
         check_timestamp(sample_df, timestamp_audio)
 
@@ -538,7 +540,8 @@ def test_no_timebin_several_tz(sample_df: DataFrame) -> None:
         ignore_index=False,
     )
     timestamp_wav = to_datetime(
-        sample_df["filename"], format="%Y_%m_%d_%H_%M_%S",
+        sample_df["filename"],
+        format="%Y_%m_%d_%H_%M_%S",
     ).dt.tz_localize(pytz.UTC)
     df_out = reshape_timebin(sample_df, timestamp_audio=timestamp_wav, timebin_new=None)
     assert df_out.equals(sample_df)
@@ -658,7 +661,9 @@ def test_reshape_daily_multiple_bins(sample_df: DataFrame) -> None:
         format="%Y_%m_%d_%H_%M_%S",
     ).dt.tz_localize(tz)
     df_out = reshape_timebin(
-        sample_df, timestamp_audio=timestamp_wav, timebin_new=Timedelta(days=1),
+        sample_df,
+        timestamp_audio=timestamp_wav,
+        timebin_new=Timedelta(days=1),
     )
     assert not df_out.empty
     assert all(df_out["end_time"] == 86400.0)
@@ -671,7 +676,8 @@ def test_reshape_daily_multiple_bins(sample_df: DataFrame) -> None:
 def test_with_manual_timestamps_vector(sample_df: DataFrame) -> None:
     tz = get_timezone(sample_df)
     timestamp_wav = to_datetime(
-        sample_df["filename"], format="%Y_%m_%d_%H_%M_%S",
+        sample_df["filename"],
+        format="%Y_%m_%d_%H_%M_%S",
     ).dt.tz_localize(tz)
     df_out = reshape_timebin(
         sample_df,
@@ -687,7 +693,8 @@ def test_with_manual_timestamps_vector(sample_df: DataFrame) -> None:
 def test_empty_result_when_no_matching(sample_df: DataFrame) -> None:
     tz = get_timezone(sample_df)
     timestamp_wav = to_datetime(
-        sample_df["filename"], format="%Y_%m_%d_%H_%M_%S",
+        sample_df["filename"],
+        format="%Y_%m_%d_%H_%M_%S",
     ).dt.tz_localize(tz)
     df = reshape_timebin(
         DataFrame(),
@@ -740,7 +747,8 @@ def test_intersection(sample_df: DataFrame) -> None:
 
 def test_union(sample_df: DataFrame) -> None:
     df_result = intersection_or_union(
-        sample_df[sample_df["annotator"].isin(["ann1", "ann2"])], user_sel="union",
+        sample_df[sample_df["annotator"].isin(["ann1", "ann2"])],
+        user_sel="union",
     )
 
     assert set(df_result["label"]) == {"lbl1 ∪ lbl2"}
@@ -755,7 +763,8 @@ def test_all_user_sel_returns_original(sample_df: DataFrame) -> None:
 
 def test_invalid_user_sel_raises(sample_df: DataFrame) -> None:
     with pytest.raises(
-        ValueError, match="'user_sel' must be either 'intersection' or 'union'",
+        ValueError,
+        match="'user_sel' must be either 'intersection' or 'union'",
     ):
         intersection_or_union(sample_df, user_sel="invalid")
 
@@ -769,3 +778,28 @@ def test_not_enough_annotators_raises() -> None:
     })
     with pytest.raises(ValueError, match="Not enough annotators detected"):
         intersection_or_union(df_single_annotator, user_sel="intersection")
+
+
+def test_intersection_or_union_single_annotator_raises(sample_df: DataFrame) -> None:
+    from disclose.utils.filtering import intersection_or_union
+
+    one = sample_df[sample_df["annotator"] == "ann1"]
+    with pytest.raises(ValueError, match="Not enough annotators"):
+        intersection_or_union(one, "union")
+
+
+def test_parse_unique_timestamps_matches_rowwise_parsing() -> None:
+    from osekit.utils.timestamp import strptime_from_text
+
+    from disclose.utils.filtering import parse_unique_timestamps
+
+    names = Series(
+        ["2025_01_25_06_20_00", "2025_01_25_06_30_00", "2025_01_25_06_20_00"],
+        index=[5, 6, 7],
+    )
+
+    result = parse_unique_timestamps(names, "%Y_%m_%d_%H_%M_%S")
+
+    expected = [strptime_from_text(n, "%Y_%m_%d_%H_%M_%S") for n in names]
+    assert result.tolist() == expected
+    assert result.index.tolist() == [5, 6, 7]
