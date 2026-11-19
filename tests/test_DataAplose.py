@@ -13,7 +13,11 @@ from matplotlib.axes import Axes
 from pandas import DataFrame, Timedelta, Timestamp
 from pandas.tseries import frequencies
 
-from disclose.dataclass.data_aplose import DataAplose, _get_locator_from_offset
+from disclose.dataclass.data_aplose import (
+    DataAplose,
+    PlotAccessor,
+    _get_locator_from_offset,
+)
 from disclose.utils.filtering import get_timezone
 
 
@@ -757,3 +761,253 @@ def test_timeline_plot(sample_csv_result: Path) -> None:
         ax=ax,
         coordinates=(0, 0),
     )
+
+
+# %% __post_init__ / _localize
+
+
+def test_post_init_missing_columns(sample_df: DataFrame) -> None:
+    incomplete = sample_df.drop(columns=["annotator", "label"])
+
+    with pytest.raises(
+        ValueError,
+        match=r"not APLOSE-formatted, missing columns: \['label', 'annotator'\]",
+    ):
+        DataAplose(incomplete)
+
+
+def test_localize_keeps_aware_timestamp(sample_df: DataFrame) -> None:
+    data = DataAplose(sample_df)
+    aware = Timestamp("2025-01-01 00:00:00", tz="Etc/GMT-7")
+
+    assert data._localize(aware) == aware
+
+
+def test_localize_uses_data_timezone(sample_df: DataFrame) -> None:
+    data = DataAplose(sample_df)
+    data.change_tz(pytz.timezone("Etc/GMT-7"))
+
+    localized = data._localize(Timestamp("2025-01-01 00:00:00"))
+
+    assert localized == Timestamp("2025-01-01 00:00:00", tz="Etc/GMT-7")
+
+
+def test_localize_several_timezones(sample_df: DataFrame, monkeypatch) -> None:
+    data = DataAplose(sample_df)
+    monkeypatch.setattr(
+        "disclose.dataclass.data_aplose.get_timezone",
+        lambda _: [pytz.utc, pytz.timezone("Etc/GMT-7")],
+    )
+
+    with pytest.raises(TypeError, match="several timezones"):
+        data._localize(Timestamp("2025-01-01 00:00:00"))
+
+
+def test_reshape_naive_bounds_with_several_timezones(
+    sample_df: DataFrame,
+    monkeypatch,
+) -> None:
+    data = DataAplose(sample_df)
+    monkeypatch.setattr(
+        "disclose.dataclass.data_aplose.get_timezone",
+        lambda _: [pytz.utc, pytz.timezone("Etc/GMT-7")],
+    )
+
+    with pytest.raises(TypeError, match="several timezones"):
+        data.reshape(start_datetime=Timestamp("2025-01-25 06:20:00"))
+
+
+# %% merge / copy / reshape / filter
+
+
+@pytest.mark.parametrize(
+    ("coordinates", "expected"),
+    [
+        pytest.param([(48.39, -4.49), None], (48.39, -4.49), id="only_one_has_some"),
+        pytest.param(
+            [(48.39, -4.49), (48.39, -4.49)],
+            (48.39, -4.49),
+            id="all_agree",
+        ),
+        pytest.param([(48.39, -4.49), (43.0, 5.0)], (None, None), id="conflict"),
+        pytest.param([None, None], (None, None), id="none_set"),
+    ],
+)
+def test_merge_coordinates(
+    sample_df: DataFrame,
+    coordinates: list[tuple[float, float] | None],
+    expected: tuple[float | None, float | None],
+) -> None:
+    half = len(sample_df) // 2
+    data1 = DataAplose(sample_df.iloc[:half])
+    data2 = DataAplose(sample_df.iloc[half:])
+    for data, coord in zip((data1, data2), coordinates, strict=True):
+        if coord is not None:
+            data.coordinates = coord
+
+    merged = DataAplose.merge([data1, data2])
+
+    assert merged.coordinates == expected
+
+
+def test_merge_empty_list() -> None:
+    with pytest.raises(ValueError, match="No DataAplose to merge"):
+        DataAplose.merge([])
+
+
+def test_copy_is_independent(sample_data_aplose: DataAplose) -> None:
+    sample_data_aplose.coordinates = (48.39, -4.49)
+    sample_data_aplose.reshape(
+        start_datetime=Timestamp("2025-01-25 06:20:00", tz="UTC"),
+        end_datetime=Timestamp("2025-01-25 06:40:00", tz="UTC"),
+    )
+
+    clone = sample_data_aplose.copy()
+
+    assert clone is not sample_data_aplose
+    assert clone.df is not sample_data_aplose.df
+    assert clone.df.equals(sample_data_aplose.df)
+    assert clone.config is not sample_data_aplose.config
+    assert clone.coordinates == (48.39, -4.49)
+    assert clone.start_datetime == sample_data_aplose.start_datetime
+    assert clone.end_datetime == sample_data_aplose.end_datetime
+
+    clone.df.loc[clone.df.index[0], "label"] = "changed"
+    clone.change_tz("Etc/GMT-7")
+
+    assert "changed" not in set(sample_data_aplose.df["label"])
+    assert get_timezone(sample_data_aplose.df) == pytz.utc
+
+
+def test_reshape_empty_dataframe_is_noop() -> None:
+    data = DataAplose()
+
+    result = data.reshape(
+        start_datetime=Timestamp("2025-01-01", tz="UTC"),
+        end_datetime=Timestamp("2025-01-02", tz="UTC"),
+    )
+
+    assert result is data
+    assert data.df.empty
+    assert data.start_datetime is None
+    assert data.end_datetime is None
+
+
+def test_reshape_without_bounds_is_noop(sample_df: DataFrame) -> None:
+    data = DataAplose(sample_df)
+
+    result = data.reshape()
+
+    assert result is data
+    assert data.df.equals(sample_df)
+
+
+def test_filter_returns_independent_filtered_instance(
+    sample_df: DataFrame,
+) -> None:
+    data = DataAplose(sample_df)
+    data.coordinates = (48.39, -4.49)
+    n_rows = len(data.df)
+
+    filtered = data.filter("ann1", "lbl1")
+
+    assert filtered is not data
+    assert len(data.df) == n_rows
+    assert set(filtered.df["annotator"]) == {"ann1"}
+    assert set(filtered.df["label"]) == {"lbl1"}
+    assert filtered.df.index.tolist() == list(range(len(filtered.df)))
+    assert filtered.coordinates == (48.39, -4.49)
+    assert filtered.config == data.config
+
+
+def test_filter_multiple_pairs(sample_df: DataFrame) -> None:
+    filtered = DataAplose(sample_df).filter(["ann1", "ann2"], ["lbl1", "lbl2"])
+
+    pairs = set(zip(filtered.df["annotator"], filtered.df["label"], strict=True))
+    assert pairs == {("ann1", "lbl1"), ("ann2", "lbl2")}
+
+
+def test_filter_unknown_annotator(sample_df: DataFrame) -> None:
+    with pytest.raises(ValueError, match='Annotator "nobody" not in APLOSE'):
+        DataAplose(sample_df).filter("nobody", "lbl1")
+
+
+# %% PlotAccessor
+
+
+@pytest.mark.parametrize("kind", ["histogram", "polar", "heatmap"])
+def test_plot_call_dispatches_to_method(
+    sample_df: DataFrame,
+    monkeypatch,
+    kind: str,
+) -> None:
+    data = DataAplose(sample_df)
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        type(data.plot),
+        kind,
+        lambda self, *args, **kwargs: calls.append((args, kwargs)) or "result",
+    )
+
+    result = data.plot(kind, "ann1", "lbl1", bin_size=Timedelta("1D"))
+
+    assert result == "result"
+    assert calls == [(("ann1", "lbl1"), {"bin_size": Timedelta("1D")})]
+
+
+def test_plot_call_unknown_kind(sample_df: DataFrame) -> None:
+    with pytest.raises(ValueError, match="Unknown plot kind 'pie'"):
+        DataAplose(sample_df).plot("pie")
+
+
+def test_get_ax_returns_provided_axes(ax: Axes) -> None:
+    assert PlotAccessor._get_ax(ax) is ax
+
+
+def test_get_ax_creates_axes() -> None:
+    created = PlotAccessor._get_ax()
+
+    assert isinstance(created, Axes)
+    assert created.name == "rectilinear"
+    plt.close("all")
+
+
+def test_get_ax_creates_polar_axes() -> None:
+    created = PlotAccessor._get_ax(polar=True)
+
+    assert created.name == "polar"
+    plt.close("all")
+
+
+@pytest.mark.parametrize(
+    "coordinates",
+    [
+        pytest.param((None, None), id="none_none"),
+        pytest.param((48.39, None), id="lat_only"),
+        pytest.param((None, -4.49), id="lon_only"),
+    ],
+)
+def test_coordinates_required_but_missing(
+    sample_df: DataFrame,
+    coordinates: tuple[float | None, float | None],
+) -> None:
+    data = DataAplose(sample_df)
+    data.lat, data.lon = coordinates
+
+    with pytest.raises(ValueError, match="Coordinates are required"):
+        data.plot._coordinates(None, required=True)
+
+
+def test_coordinates_not_required_returns_unset(sample_df: DataFrame) -> None:
+    assert DataAplose(sample_df).plot._coordinates(None, required=False) == (
+        None,
+        None,
+    )
+
+
+def test_coordinates_override_takes_precedence(sample_df: DataFrame) -> None:
+    data = DataAplose(sample_df)
+    data.coordinates = (48.39, -4.49)
+
+    assert data.plot._coordinates((43.0, 5.0), required=True) == (43.0, 5.0)
+    assert data.plot._coordinates(None, required=True) == (48.39, -4.49)
