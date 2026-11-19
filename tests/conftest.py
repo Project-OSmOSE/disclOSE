@@ -11,6 +11,9 @@ from osekit.utils.timestamp import strftime_osmose_format
 from pandas import DataFrame, DatetimeIndex, Timedelta, date_range, read_csv
 
 from disclose.dataclass.data_aplose import DataAplose
+from disclose.dataclass.data_aplose_config import DataAploseConfig
+from disclose.dataclass.recording_period import RecordingPeriod
+from disclose.utils.core import get_count
 
 SAMPLE = """dataset,filename,start_time,end_time,min_frequency,max_frequency,label,annotator,start_datetime,end_datetime,type,confidence
 sample_dataset,2025_01_25_06_20_00,0.0,10.0,0.0,72000.0,lbl2,ann2,2025-01-25T06:20:00.000+00:00,2025-01-25T06:20:10.000+00:00,WEAK,0.11
@@ -160,6 +163,14 @@ def sample_data_aplose(sample_csv_result: Path) -> DataAplose | list[DataAplose]
 
 
 @pytest.fixture
+def sample_df_counts(sample_df: DataFrame) -> DataFrame:
+    df_filtered = sample_df[
+        (sample_df["annotator"].isin(["ann1", "ann2"])) & (sample_df["label"] == "lbl1")
+    ]
+    return get_count(df_filtered, Timedelta("10min"))
+
+
+@pytest.fixture
 def df_ann1_lbl1(sample_df: DataFrame) -> DataFrame:
     """Weak detections of a single annotator/label pair."""
     return sample_df[
@@ -264,6 +275,24 @@ def recording_planning_csv(tmp_path) -> Path:
     path = tmp_path / "recording_planning.csv"
     path.write_text(RECORDING_PLANNING_CSV)
     return path
+
+
+@pytest.fixture
+def effort(
+    sample_csv_result: Path,
+    recording_planning_csv: Path,
+) -> RecordingPeriod:
+    dict_test = {
+        "detection_file": sample_csv_result,
+        "filename_format": "%Y_%m_%d_%H_%M_%S_%f%z",
+        "recording_file": recording_planning_csv,
+    }
+    config = DataAploseConfig(**dict_test)
+
+    return RecordingPeriod.from_config(
+        config=config,
+        bin_size=Timedelta("1h"),
+    )
 
 
 @pytest.fixture

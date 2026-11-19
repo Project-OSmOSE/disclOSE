@@ -497,7 +497,7 @@ def test_detection_perf(sample_csv_result: Path, recording_planning_csv: Path) -
     config = {
         "detection_file": sample_csv_result,
         "filename_format": "%Y_%m_%d_%H_%M_%S",
-        "timebin_new": Timedelta(seconds=60),
+        "timebin_new": Timedelta("10min"),
         "recording_file": recording_planning_csv,
     }
 
