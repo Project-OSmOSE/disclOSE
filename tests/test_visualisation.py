@@ -155,7 +155,7 @@ def test_polar_bars_match_mean_proportion(sample_df: DataFrame, polar_ax: Axes) 
     assert heights == pytest.approx(mean_prop.to_numpy())
 
 
-def test_polar_creates_polar_axes_when_none(sample_df: DataFrame) -> None:
+def test_polar_rejects_non_polar_axes(sample_df: DataFrame) -> None:
     _, ax = plt.subplots()
     with pytest.raises(ValueError, match="Provided ax must have a polar projection"):
         polar(df=sample_df, ax=ax)
@@ -479,3 +479,20 @@ def test_add_sunrise_sunset(sample_df: DataFrame):
         ]
     finally:
         plt.close(fig)
+
+
+def test_polar_creates_polar_axes_when_none(sample_df: DataFrame) -> None:
+    ax, _ = polar(sample_df)
+
+    assert ax.name == "polar"
+
+
+def test_histo_without_coordinates(ax: Axes, df_counts: DataFrame) -> None:
+    histo(
+        df=df_counts,
+        ax=ax,
+        bin_size=Timedelta("1D"),
+        time_bin=Timedelta("10s"),
+    )
+
+    assert len(ax.patches) == len(df_counts)

@@ -8,7 +8,7 @@ import soundfile as sf
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from osekit.utils.timestamp import strftime_osmose_format
-from pandas import DataFrame, DatetimeIndex, date_range, read_csv, Timedelta
+from pandas import DataFrame, DatetimeIndex, Timedelta, date_range, read_csv
 
 from disclose.dataclass.data_aplose import DataAplose
 

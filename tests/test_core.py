@@ -144,7 +144,8 @@ def test_get_count_multiple_annotators(sample_df: DataFrame) -> None:
 
 def test_get_count_multiple_labels(sample_df: DataFrame) -> None:
     df = DataAplose(sample_df).filter_df(
-        annotator="ann5", label=["lbl1", "lbl2", "lbl3"],
+        annotator="ann5",
+        label=["lbl1", "lbl2", "lbl3"],
     )
     result = get_count(df, bin_size=Timedelta("1day"))
     expected = sample_df[
@@ -332,7 +333,9 @@ def test_time_range_timedelta() -> None:
     time_range, returned_bin = get_time_range_and_bin_size(timestamps, bin_size)
 
     expected = date_range(
-        start="2025-08-20 12:00:00", end="2025-08-20 15:00:00", freq="1h",
+        start="2025-08-20 12:00:00",
+        end="2025-08-20 15:00:00",
+        freq="1h",
     )
     assert (time_range == expected).all()
     assert returned_bin == bin_size
@@ -344,7 +347,9 @@ def test_time_range_baseoffset() -> None:
     time_range, returned_bin = get_time_range_and_bin_size(timestamps, bin_size)
 
     expected = date_range(
-        start="2025-08-20 12:00:00", end="2025-08-20 15:00:00", freq="1h",
+        start="2025-08-20 12:00:00",
+        end="2025-08-20 15:00:00",
+        freq="1h",
     )
     assert (time_range == expected).all()
     assert returned_bin == bin_size
@@ -361,7 +366,8 @@ def test_invalid_timestamp_list_type() -> None:
     timestamps = "not_a_list"
     bin_size = Timedelta("1h")
     with pytest.raises(
-        TypeError, match=r"`timestamp_list` must be a list\[Timestamp\]",
+        TypeError,
+        match=r"`timestamp_list` must be a list\[Timestamp\]",
     ):
         get_time_range_and_bin_size(timestamps, bin_size)
 
@@ -370,7 +376,8 @@ def test_invalid_timestamp_list_content() -> None:
     timestamps = [Timestamp("2025-08-20"), "not_a_timestamp"]
     bin_size = Timedelta("1h")
     with pytest.raises(
-        TypeError, match=r"`timestamp_list` must be a list\[Timestamp\]",
+        TypeError,
+        match=r"`timestamp_list` must be a list\[Timestamp\]",
     ):
         get_time_range_and_bin_size(timestamps, bin_size)
 
@@ -415,7 +422,8 @@ def test_round_begin_end_timestamps_valid_entry_2() -> None:
         Timestamp("2025-01-03 18:45:00"),
     ]
     start, end, bin_size = round_begin_end_timestamps(
-        ts_list, frequencies.to_offset("1h"),
+        ts_list,
+        frequencies.to_offset("1h"),
     )
 
     assert start == Timestamp("2025-01-01 10:00:00")

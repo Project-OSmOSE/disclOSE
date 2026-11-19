@@ -88,7 +88,8 @@ def test_load_glider_nav_no_files(tmp_path: Path) -> None:
 
 
 def test_compute_acoustic_diversity(
-    df_detections: DataFrame, nav_df: DataFrame,
+    df_detections: DataFrame,
+    nav_df: DataFrame,
 ) -> None:
     time_vector = list(nav_df["Timestamp"])
     result = compute_acoustic_diversity(df_detections, nav_df, time_vector)

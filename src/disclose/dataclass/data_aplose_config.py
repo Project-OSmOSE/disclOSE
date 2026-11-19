@@ -88,11 +88,13 @@ class DataAploseConfig:
         merged = {}
 
         for field in cls.__dataclass_fields__:
-            values = [
-                getattr(conf, field)
-                for conf in configs
-                if getattr(conf, field) is not None
-            ]
+            values = []
+            for conf in configs:
+                value = getattr(conf, field)
+                if value is None:
+                    continue
+                # list-valued fields (annotator, label) are flattened to stay hashable
+                values.extend(value if isinstance(value, list) else [value])
 
             if not values:
                 merged[field] = None
