@@ -34,7 +34,8 @@ def fake_detection() -> GenericModule:
 
 
 def test_process_binary_basic(
-    fake_audio: AudioData, fake_detection: GenericModule,
+    fake_audio: AudioData,
+    fake_detection: GenericModule,
 ) -> None:
     with patch("disclose.utils.pamguard.load_pamguard_binary_folder") as mock_loader:
         mock_loader.return_value = ([fake_detection], None, None)
@@ -74,7 +75,8 @@ def test_process_binary_no_detections(fake_audio: AudioData) -> None:
 
 
 def test_process_binary_detection_outside_audio(
-    fake_audio: AudioData, fake_detection: GenericModule,
+    fake_audio: AudioData,
+    fake_detection: GenericModule,
 ) -> None:
     fake_detection.date = "2025-05-28T23:59:00+0000"
 
