@@ -529,7 +529,8 @@ def percent_calc(
 
     """
     df = (
-        data.groupby(time_unit)
+        data
+        .groupby(time_unit)
         .agg(
             DP_unit=("DPh", "sum"),
             FB_unit=("FBh", "sum"),
@@ -545,9 +546,9 @@ def percent_calc(
     df["%DPh"] = df["DP_unit"] * 100 / df["tot_samp"]
     df["%FBh"] = df["FB_unit"] * 100 / df["tot_samp"]
     df["FBR"] = df.apply(
-        lambda row: (row["fbm_count"] * 100 / row["dpm_count"])
-        if row["dpm_count"] > 0
-        else 0,
+        lambda row: (
+            (row["fbm_count"] * 100 / row["dpm_count"]) if row["dpm_count"] > 0 else 0
+        ),
         axis=1,
     )
     return df
@@ -580,9 +581,11 @@ def calendar(
         ]
 
         data.loc[
-            mask & (data["end_recording"] > data["end_deployment"]), "end_recording",
+            mask & (data["end_recording"] > data["end_deployment"]),
+            "end_recording",
         ] = data.loc[
-            mask & (data["end_recording"] > data["end_deployment"]), "end_deployment",
+            mask & (data["end_recording"] > data["end_deployment"]),
+            "end_deployment",
         ]
 
         data.loc[
@@ -673,7 +676,11 @@ def _shade_missing_bars(
             start = i
         elif not is_missing and start is not None:
             ax.axvspan(
-                pos[start] - 0.5, pos[i - 1] + 0.5, color=color, alpha=alpha, zorder=0,
+                pos[start] - 0.5,
+                pos[i - 1] + 0.5,
+                color=color,
+                alpha=alpha,
+                zorder=0,
             )
             start = None
     if start is not None:
