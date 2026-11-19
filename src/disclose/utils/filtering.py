@@ -285,7 +285,8 @@ def read_dataframe(file: Path, rows: int | None = None) -> DataFrame:
     )
 
     return (
-        df.drop_duplicates()
+        df
+        .drop_duplicates()
         .dropna(subset=["label"])
         .sort_values(by=["start_datetime", "end_datetime"])
         .reset_index(drop=True)
@@ -776,7 +777,9 @@ def add_weak_detection(
 
 
 def intersection_or_union(
-    df: DataFrame, user_sel: str, effort: Any | None = None,
+    df: DataFrame,
+    user_sel: str,
+    effort: Any | None = None,
 ) -> DataFrame:
     """Compute intersection or union of detections from multiple annotators."""
     annotators = get_annotators(df)
