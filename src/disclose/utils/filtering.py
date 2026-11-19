@@ -783,7 +783,8 @@ def intersection_or_union(
 ) -> DataFrame:
     """Compute intersection or union of detections from multiple annotators."""
     annotators = get_annotators(df)
-    if len(annotators) <= 1:
+    annotators = [annotators] if isinstance(annotators, str) else annotators
+    if annotators is None or len(annotators) <= 1:
         msg = "Not enough annotators detected"
         raise ValueError(msg)
 

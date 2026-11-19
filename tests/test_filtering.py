@@ -778,3 +778,11 @@ def test_not_enough_annotators_raises() -> None:
     })
     with pytest.raises(ValueError, match="Not enough annotators detected"):
         intersection_or_union(df_single_annotator, user_sel="intersection")
+
+
+def test_intersection_or_union_single_annotator_raises(sample_df: DataFrame) -> None:
+    from disclose.utils.filtering import intersection_or_union
+
+    one = sample_df[sample_df["annotator"] == "ann1"]
+    with pytest.raises(ValueError, match="Not enough annotators"):
+        intersection_or_union(one, "union")

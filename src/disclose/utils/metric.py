@@ -220,20 +220,22 @@ def _get_precision(confusion_matrix: dict) -> float:
     """Compute precision."""
     tp = confusion_matrix["true_pos"]
     fp = confusion_matrix["false_pos"]
-    return tp / (tp + fp)
+    return tp / (tp + fp) if (tp + fp) else 0.0
 
 
 def _get_recall(confusion_matrix: dict) -> float:
     """Compute recall."""
     tp = confusion_matrix["true_pos"]
     fn = confusion_matrix["false_neg"]
-    return tp / (tp + fn)
+    return tp / (tp + fn) if (tp + fn) else 0.0
 
 
 def _get_f_score(confusion_matrix: dict) -> float:
     """Compute F-score."""
     precision = _get_precision(confusion_matrix)
     recall = _get_recall(confusion_matrix)
+    if not (precision + recall):
+        return 0.0
     return 2 * (precision * recall) / (precision + recall)
 
 

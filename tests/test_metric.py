@@ -320,3 +320,15 @@ def test_detection_perf(sample_df: DataFrame):
     assert score[0] == 1
     assert score[1] == 1
     assert score[2] == 1
+
+
+@pytest.mark.parametrize(
+    ("func", "matrix"),
+    [
+        (_get_precision, {"true_pos": 0, "false_pos": 0, "false_neg": 3}),
+        (_get_recall, {"true_pos": 0, "false_pos": 3, "false_neg": 0}),
+        (_get_f_score, {"true_pos": 0, "false_pos": 2, "false_neg": 3}),
+    ],
+)
+def test_scores_without_true_positive_do_not_divide_by_zero(func, matrix) -> None:
+    assert func(matrix) == 0.0

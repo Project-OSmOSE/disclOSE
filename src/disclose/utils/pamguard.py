@@ -91,11 +91,17 @@ def process_binary(
         begin = Timestamp(d.date)
         start_datetimes.append(begin)
 
-        matching_file = None
-        for f in audio.files:
-            if f.begin <= begin <= f.end:
-                matching_file = f
-                break
+        matching_file = next(
+            (
+                f
+                for f in sorted(audio.files, key=lambda f: f.begin)
+                if f.begin <= begin <= f.end
+            ),
+            None,
+        )
+        if matching_file is None:
+            msg = f"No audio file matches the detection at {begin}."
+            raise ValueError(msg)
 
         duration = Timedelta(d.sample_duration / matching_file.sample_rate, "s")
         durations.append(duration)

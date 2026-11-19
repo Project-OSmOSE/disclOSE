@@ -82,5 +82,5 @@ def test_process_binary_detection_outside_audio(
 
     with patch("disclose.utils.pamguard.load_pamguard_binary_folder") as mock_loader:
         mock_loader.return_value = ([fake_detection], None, None)
-        with pytest.raises(AttributeError):
+        with pytest.raises(ValueError, match="No audio file matches the detection"):
             process_binary(fake_audio, Path("/fake/binary"), "Dataset", "Label")
