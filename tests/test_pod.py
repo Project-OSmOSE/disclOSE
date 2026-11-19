@@ -3,12 +3,29 @@
 import secrets
 from datetime import tzinfo
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import pytz
-from pandas import DataFrame, Timedelta, Timestamp
+from pandas import DataFrame, Series, Timedelta, Timestamp
+from numpy import array, allclose, exp
+from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from disclose.utils.pod import (
+    _mixture_density,
+    calendar,
+    cluster_info,
+    gmm_feeding_buzz,
+    percent_barplot,
+    plot_gmm_ici,
+    compute_ici,
+    create_matrix,
+    get_feeding_buzz_datetime,
+    get_group_colors,
+    percent_calc,
+    _shade_missing_bars,
     fit_gmm,
     load_pod_folder,
     pod2aplose,
@@ -525,3 +542,217 @@ def test_timelost_process(sample_tl_df: DataFrame, timezone: tzinfo) -> None:
     assert isinstance(result, DataFrame)
     assert list(result.columns) == expected_columns
     assert set(result["Deploy"]) == {"deploy1", "deploy2"}
+
+
+# Additional POD utility tests
+@pytest.mark.parametrize(
+    ("minute", "microsec", "expected"),
+    [
+        (1, 500_000, Timestamp("1899-12-30 00:01:00.500")),
+        ("25/1/2019 11:45", 500_000, Timestamp("2019-01-25 11:45:00.500")),
+    ],
+)
+def test_get_feeding_buzz_datetime(
+    minute: int | str,
+    microsec: int,
+    expected: Timestamp,
+) -> None:
+    row = Series({"Minute": minute, "microsec": microsec})
+    assert get_feeding_buzz_datetime(row) == expected
+
+
+def test_get_feeding_buzz_datetime_invalid() -> None:
+    with pytest.raises(ExceptionGroup, match="Could not convert"):
+        get_feeding_buzz_datetime(Series({"Minute": "invalid", "microsec": 10}))
+
+
+def test_compute_ici() -> None:
+    df = DataFrame({
+        "Datetime": [
+            Timestamp("2024-01-01 00:00:00"),
+            Timestamp("2024-01-01 00:01:00"),
+            Timestamp("2024-01-01 00:01:00"),
+            Timestamp("2024-01-01 00:03:00"),
+        ]
+    })
+    result = compute_ici(df)
+    assert result["ICI_minutes"].tolist() == [1.0, 2.0]
+    assert "ICI_minutes" not in df.columns
+
+
+def test_create_matrix() -> None:
+    df = DataFrame({"Site": ["A", "A", "B", "B"], "DPM": [2, 4, 6, 8]})
+    result = create_matrix(df, ["Site"], ["DPM"])
+    assert result.columns.tolist() == ["Site", "DPM_mean", "DPM_std"]
+    assert result["DPM_mean"].tolist() == [3.0, 7.0]
+    assert allclose(result["DPM_std"], [2**0.5, 2**0.5])
+
+
+def test_percent_calc() -> None:
+    df = DataFrame({
+        "Site": ["A", "A", "B"],
+        "DPh": [1, 0, 0],
+        "FBh": [1, 0, 0],
+        "dpm_count": [30, 0, 0],
+        "fbm_count": [6, 0, 0],
+        "Day": [1, 1, 1],
+    })
+    result = percent_calc(df, "Site").set_index("Site")
+    assert result.loc["A", "%click"] == 25
+    assert result.loc["A", "%buzzes"] == 5
+    assert result.loc["A", "%DPh"] == 50
+    assert result.loc["A", "%FBh"] == 50
+    assert result.loc["A", "FBR"] == 20
+    assert result.loc["B", "FBR"] == 0
+
+
+@pytest.mark.parametrize("threshold", [-1, 101, 1.5])
+def test_process_timelost_invalid_threshold(threshold: float) -> None:
+    with pytest.raises(ValueError, match="Threshold"):
+        process_timelost(DataFrame(), threshold=threshold)
+
+
+def test_get_group_colors() -> None:
+    df = DataFrame({"Site": ["A", "B", "A"]})
+    colors = get_group_colors(df, "Site")
+    assert list(colors) == ["A", "B"]
+    assert colors["A"] != colors["B"]
+
+
+def test_shade_missing_bars() -> None:
+    fig, ax = plt.subplots()
+    try:
+        _shade_missing_bars(ax, array([False, True, True, False, True]))
+        assert len(ax.patches) == 2
+    finally:
+        plt.close(fig)
+
+
+@pytest.fixture
+def simple_gmm() -> SimpleNamespace:
+    return SimpleNamespace(
+        n_components=2,
+        means_=array([[1.0], [0.0]]),
+        covariances_=array([[[4.0]], [[1.0]]]),
+        weights_=array([0.25, 0.75]),
+    )
+
+
+def test_cluster_info(simple_gmm: SimpleNamespace) -> None:
+    result = cluster_info(simple_gmm)
+    assert [item["name"] for item in result] == ["Buzz ICIs", "Regular ICIs"]
+    assert [item["id"] for item in result] == [0, 1]
+    assert allclose([item["mean_log"] for item in result], [0, 1])
+    assert allclose([item["mean_minutes"] for item in result], [1, exp(1)])
+    assert allclose([item["std_log"] for item in result], [2, 1])
+    assert allclose([item["mean_ms"] for item in result], [60_000, exp(1) * 60_000])
+
+
+def test_mixture_density(simple_gmm: SimpleNamespace) -> None:
+    from scipy.stats import norm
+
+    x = array([0.0, 1.0])
+    expected = 0.25 * norm.pdf(x, 1, 2) + 0.75 * norm.pdf(x, 0, 1)
+    assert allclose(_mixture_density(simple_gmm, x), expected)
+
+
+def test_gmm_feeding_buzz(monkeypatch: pytest.MonkeyPatch) -> None:
+    clustered = DataFrame({
+        "Datetime": [
+            Timestamp("2024-01-01 12:00:01"),
+            Timestamp("2024-01-01 12:00:02"),
+            Timestamp("2024-01-01 12:01:01"),
+        ],
+        "cluster": [0, 0, 1],
+    })
+    monkeypatch.setattr(
+        "disclose.utils.pod.fit_gmm",
+        lambda df, comp: (clustered.copy(), array([[0.0]]), None),
+    )
+    result = gmm_feeding_buzz(DataFrame(), comp=2)
+    assert result["Buzz"].tolist() == [2.0, 0.0]
+    assert result["fbm_count"].tolist() == [1, 0]
+    assert result["start_datetime"].tolist() == [
+        Timestamp("2024-01-01 12:00"),
+        Timestamp("2024-01-01 12:01"),
+    ]
+
+
+def test_plot_gmm_ici(
+    monkeypatch: pytest.MonkeyPatch,
+    simple_gmm: SimpleNamespace,
+) -> None:
+    monkeypatch.setattr(
+        "disclose.utils.pod.fit_gmm",
+        lambda df, comp: (DataFrame(), array([[0.0], [1.0]]), simple_gmm),
+    )
+    monkeypatch.setattr(plt, "show", lambda: None)
+    fig, ax = plot_gmm_ici(DataFrame(), comp=2)
+    try:
+        assert isinstance(fig, Figure)
+        assert isinstance(ax, Axes)
+        assert len(ax.lines) == 3  # Two components and the mixture
+        assert ax.get_xlabel() == "Log ICI (log minutes)"
+    finally:
+        plt.close(fig)
+
+
+def test_calendar(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(plt, "show", lambda: None)
+    df = DataFrame({
+        "Site": ["A"],
+        "Phase": [1],
+        "start_deployment": ["2024-01-01"],
+        "end_deployment": ["2024-01-05"],
+        "start_recording": ["2023-12-31"],
+        "end_recording": ["2024-01-06"],
+    })
+    before = set(plt.get_fignums())
+    try:
+        assert calendar(df) is None
+        assert df.loc[0, "start_recording"] == Timestamp("2024-01-01")
+        assert df.loc[0, "end_recording"] == Timestamp("2024-01-05")
+        ax = plt.gcf().axes[0]
+        assert [label.get_text() for label in ax.get_yticklabels()] == ["A"]
+        assert len(ax.collections) == 2  # Deployment and recording
+    finally:
+        for number in set(plt.get_fignums()) - before:
+            plt.close(number)
+
+
+def test_percent_barplot() -> None:
+    df = DataFrame({
+        "Month": ["Jan", "Feb"],
+        "Site": ["A", "B"],
+        "FBR_mean": [10.0, 20.0],
+        "FBR_std": [1.0, 2.0],
+    })
+    fig, ax = plt.subplots()
+    try:
+        result = percent_barplot(
+            df,
+            "Month",
+            "FBR",
+            ax=ax,
+            show_std=True,
+            shade_missing=False,
+            dynamic_ylim=False,
+        )
+        assert result is ax
+        assert len(ax.patches) == 2
+        assert allclose([bar.get_height() for bar in ax.patches], [10, 20])
+        assert all(bar.get_hatch() == "/" for bar in ax.patches)
+        assert ax.get_legend() is not None
+        assert ax.get_ylabel() == "FBR"
+    finally:
+        plt.close(fig)
+
+
+def test_percent_barplot_empty() -> None:
+    fig, ax = plt.subplots()
+    try:
+        result = percent_barplot(DataFrame({"FBR": []}), "Month", "FBR", ax=ax)
+        assert result is ax
+        assert not ax.patches
+    finally:
+        plt.close(fig)
