@@ -35,7 +35,7 @@ from pandas import (
 from scipy import stats
 from sklearn import mixture
 
-from disclose.utils.filtering import find_delimiter
+from disclose.utils.filtering import find_delimiter, parse_unique_timestamps
 from disclose.utils.visualisation import set_dynamic_ylim
 
 if TYPE_CHECKING:
@@ -163,9 +163,10 @@ def load_pod_folder(
 def _process_csv_data(data: DataFrame) -> DataFrame:
     """Process CSV data with filtering and datetime conversion."""
     data_filtered = _filter_csv_data(data)
-    data_filtered["Datetime"] = [
-        strptime_from_text(dt, "%d/%m/%Y %H:%M") for dt in data_filtered["ChunkEnd"]
-    ]
+    data_filtered["Datetime"] = parse_unique_timestamps(
+        data_filtered["ChunkEnd"],
+        "%d/%m/%Y %H:%M",
+    )
     return data_filtered.sort_values(by=["Datetime"]).reset_index(drop=True)
 
 

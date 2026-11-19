@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 import pytz
-from pandas import DataFrame, Timedelta, Timestamp, concat, to_datetime
+from pandas import DataFrame, Series, Timedelta, Timestamp, concat, to_datetime
 
 from disclose.utils.filtering import (
     _normalize_timezones,
@@ -786,3 +786,20 @@ def test_intersection_or_union_single_annotator_raises(sample_df: DataFrame) -> 
     one = sample_df[sample_df["annotator"] == "ann1"]
     with pytest.raises(ValueError, match="Not enough annotators"):
         intersection_or_union(one, "union")
+
+
+def test_parse_unique_timestamps_matches_rowwise_parsing() -> None:
+    from osekit.utils.timestamp import strptime_from_text
+
+    from disclose.utils.filtering import parse_unique_timestamps
+
+    names = Series(
+        ["2025_01_25_06_20_00", "2025_01_25_06_30_00", "2025_01_25_06_20_00"],
+        index=[5, 6, 7],
+    )
+
+    result = parse_unique_timestamps(names, "%Y_%m_%d_%H_%M_%S")
+
+    expected = [strptime_from_text(n, "%Y_%m_%d_%H_%M_%S") for n in names]
+    assert result.tolist() == expected
+    assert result.index.tolist() == [5, 6, 7]

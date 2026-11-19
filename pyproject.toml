@@ -71,17 +71,17 @@ build-backend = "hatchling.build"
 
 [tool.ruff.lint.extend-per-file-ignores]
 "src/**/*.py" = [
-    "CPY001", # missing-copyright-notice, no copyright at top of file
-    "DOC201", # docstring-missing-returns, no return in function docstring
-    "DOC501", # docstring-missing-exception, no raised exceptions in docstring
+    "missing-copyright-notice", # missing-copyright-notice, no copyright at top of file
+    "docstring-missing-returns", # docstring-missing-returns, no return in function docstring
+    "docstring-missing-exception", # docstring-missing-exception, no raised exceptions in docstring
 ]
 
 "tests/**/*.py" = [
-    "S101",   # assert, asserts allowed in tests...
+    "assert",   # assert, asserts allowed in tests...
     "ARG",    # Unused function args -> fixtures nevertheless are functionally relevant...
     "FBT",    # Don't care about booleans as positional arguments in tests...
     "D",      # Docstring-related stuff
-    "SLF001", # private-member-access, Access to private variables
-    "BLE001", # blind-except, Blind exceptions
-    "PLR0913",# too-many-arguments, Too many arguments in methods
+    "private-member-access", # private-member-access, Access to private variables
+    "blind-except", # blind-except, Blind exceptions
+    "too-many-arguments",# too-many-arguments, Too many arguments in methods
 ]

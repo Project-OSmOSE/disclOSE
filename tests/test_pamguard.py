@@ -84,3 +84,28 @@ def test_process_binary_detection_outside_audio(
         mock_loader.return_value = ([fake_detection], None, None)
         with pytest.raises(ValueError, match="No audio file matches the detection"):
             process_binary(fake_audio, Path("/fake/binary"), "Dataset", "Label")
+
+
+def test_process_binary_matches_file_among_several(
+    fake_audio: AudioData,
+    fake_detection: GenericModule,
+) -> None:
+    first, second = MagicMock(), MagicMock()
+    first.begin, first.end = (
+        Timestamp("2025-05-29T00:00:00+0000"),
+        Timestamp("2025-05-29T00:05:00+0000"),
+    )
+    second.begin, second.end = (
+        Timestamp("2025-05-29T00:05:00.001+0000"),
+        Timestamp("2025-05-29T00:15:00+0000"),
+    )
+    for f, name in ((first, "a.wav"), (second, "b.wav")):
+        f.sample_rate = 48000
+        f.path.name = name
+    fake_audio.files = {second, first}  # unordered, as in a set
+
+    with patch("disclose.utils.pamguard.load_pamguard_binary_folder") as mock_loader:
+        mock_loader.return_value = ([fake_detection], None, None)
+        df = process_binary(fake_audio, Path("/fake/binary"), "ds", "lbl")
+
+    assert df["filename"].tolist() == ["b.wav"]

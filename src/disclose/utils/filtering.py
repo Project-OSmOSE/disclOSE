@@ -14,6 +14,7 @@ from osekit.utils.timestamp import strftime_osmose_format, strptime_from_text
 from pandas import (
     DataFrame,
     Index,
+    Series,
     Timedelta,
     Timestamp,
     concat,
@@ -617,6 +618,29 @@ def reshape_timebin(
     )
 
 
+def parse_unique_timestamps(values: Series, datetime_template: str) -> Series:
+    """Parse text timestamps, calling the parser once per distinct value.
+
+    Parameters
+    ----------
+    values: Series
+        Text containing timestamps (e.g. filenames), possibly with many repeats.
+    datetime_template: str
+        strptime-like template used to parse each value.
+
+    Returns
+    -------
+    Series
+        Parsed timestamps, with the same index as ``values``.
+
+    """
+    parsed = {
+        v: strptime_from_text(v, datetime_template=datetime_template)
+        for v in values.unique()
+    }
+    return values.map(parsed)
+
+
 def get_filename_timestamps(df: DataFrame, date_parser: str) -> list[Timestamp]:
     """Get audio file start timestamps of each detection contained in df.
 
@@ -634,13 +658,7 @@ def get_filename_timestamps(df: DataFrame, date_parser: str) -> list[Timestamp]:
 
     """
     tz = get_timezone(df)
-    timestamps = [
-        strptime_from_text(
-            ts,
-            datetime_template=date_parser,
-        )
-        for ts in df["filename"]
-    ]
+    timestamps = parse_unique_timestamps(df["filename"], date_parser).tolist()
 
     if all(t.tz is None for t in timestamps):
         timestamps = [t.tz_localize(tz) for t in timestamps]

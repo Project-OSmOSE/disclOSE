@@ -2,7 +2,7 @@ from pathlib import Path
 
 from osekit.core.audio_data import AudioData
 from osekit.utils.timestamp import strftime_osmose_format
-from pandas import DataFrame, Timedelta, Timestamp
+from pandas import DataFrame, Series, Timedelta, Timestamp
 from pypamguard import load_pamguard_binary_folder
 from pypamguard.core.filters import DateFilter, Filters
 from pypamguard.logger import Verbosity, logger
@@ -87,19 +87,16 @@ def process_binary(
         annotator,
     ) = ([], [], [], [], [], [], [], [], [])
 
+    audio_files = sorted(audio.files, key=lambda f: f.begin)
+    file_begins = Series([f.begin for f in audio_files])
+
     for d in tqdm(data, desc="Creating DataFrame"):
         begin = Timestamp(d.date)
         start_datetimes.append(begin)
 
-        matching_file = next(
-            (
-                f
-                for f in sorted(audio.files, key=lambda f: f.begin)
-                if f.begin <= begin <= f.end
-            ),
-            None,
-        )
-        if matching_file is None:
+        idx = int(file_begins.searchsorted(begin, side="right")) - 1
+        matching_file = audio_files[idx] if idx >= 0 else None
+        if matching_file is None or begin > matching_file.end:
             msg = f"No audio file matches the detection at {begin}."
             raise ValueError(msg)
 

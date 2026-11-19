@@ -300,7 +300,8 @@ def test_plot_histogram_missing_bin_size(monkeypatch, sample_df: DataFrame) -> N
     _, ax = plt.subplots()
 
     with pytest.raises(
-        TypeError, match=r"missing 1 required positional argument: 'bin_size'"
+        TypeError,
+        match=r"missing 1 required positional argument: 'bin_size'",
     ):
         obj.plot.histogram(
             ax=ax,
