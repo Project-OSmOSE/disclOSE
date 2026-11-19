@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, NamedTuple, TypedDict
 
 from disclose.utils.core import get_count
 from disclose.utils.filtering import (
@@ -25,7 +25,7 @@ class Classification(TypedDict):
     true_positive: list[Timestamp]
     false_positive: list[Timestamp]
     true_negative: list[Timestamp]
-    false_negative: list[Timestamp]
+    false_negatives: list[Timestamp]
     error: list[Timestamp]
 
 
@@ -39,7 +39,7 @@ class ConfusionMatrix(TypedDict):
     error: int
 
 
-class Scores(TypedDict):
+class Scores(NamedTuple):
     """Precision, recall, and F-score computed from the confusion matrix."""
 
     precision: float
@@ -56,17 +56,17 @@ def _get_classification_timestamps(
     Both vectors are expected to contain binary values (0 or 1), with other
     values classified as errors.
     """
-    true_pos_mask = (vec1 == 1) & (vec2 == 1)
-    false_pos_mask = (vec1 == 0) & (vec2 == 1)
-    false_neg_mask = (vec1 == 1) & (vec2 == 0)
-    true_neg_mask = (vec1 == 0) & (vec2 == 0)
+    true_positive_mask = (vec1 == 1) & (vec2 == 1)
+    false_positive_mask = (vec1 == 0) & (vec2 == 1)
+    false_negative_mask = (vec1 == 1) & (vec2 == 0)
+    true_negative_mask = (vec1 == 0) & (vec2 == 0)
     error_mask = (~vec1.isin([0, 1])) | (~vec2.isin([0, 1]))
 
     return {
-        "true_pos": vec1.index[true_pos_mask].tolist(),
-        "false_pos": vec1.index[false_pos_mask].tolist(),
-        "false_neg": vec1.index[false_neg_mask].tolist(),
-        "true_neg": vec1.index[true_neg_mask].tolist(),
+        "true_positive": vec1.index[true_positive_mask].tolist(),
+        "false_positive": vec1.index[false_positive_mask].tolist(),
+        "false_negative": vec1.index[false_negative_mask].tolist(),
+        "true_negative": vec1.index[true_negative_mask].tolist(),
         "error": vec1.index[error_mask].tolist(),
     }
 
@@ -82,7 +82,7 @@ def _compute_confusion_matrix(timestamps: dict[str, list[Timestamp]]) -> dict[st
     Returns
     -------
     confusion_matrix: dict[str, int]
-        Counts for true_pos, false_pos, false_neg, true_neg, error
+        Counts for true_positive, false_positive, false_negative, true_negative, error
 
     """
     confusion_matrix = {key: len(values) for key, values in timestamps.items()}
@@ -92,8 +92,8 @@ def _compute_confusion_matrix(timestamps: dict[str, list[Timestamp]]) -> dict[st
         raise ValueError(msg)
 
     if (
-        confusion_matrix["true_pos"] + confusion_matrix["false_pos"] == 0
-        or confusion_matrix["false_neg"] + confusion_matrix["true_pos"] == 0
+        confusion_matrix["true_positive"] + confusion_matrix["false_positive"] == 0
+        or confusion_matrix["false_negative"] + confusion_matrix["true_positive"] == 0
     ):
         msg = "Precision/Recall computation impossible."
         raise ValueError(msg)
@@ -162,7 +162,7 @@ def get_detection_timestamps(
     time: DatetimeIndex | None = None,
     effort: RecordingPeriod | None = None,
 ) -> dict[str, list[Timestamp]]:
-    """Retrieve the timestamps classified as true_pos/false_pos/false_neg/true_neg/error.
+    """Retrieve the timestamps classified as true_positive/false_positive/false_negative/true_negative/error.
 
     Useful for verification purposes, e.g. inspecting the exact
     false-positive timebins for a given annotator/label pair.
@@ -181,8 +181,8 @@ def get_detection_timestamps(
     Returns
     -------
     timestamps: dict[str, list[Timestamp]]
-        Lists of timestamps for each category: true_pos, false_pos,
-        false_neg, true_neg, error
+        Lists of timestamps for each category: true_positive, false_positive,
+        false_negative, true_negative, error
 
     """
     timebin = get_max_time(df)
@@ -200,7 +200,7 @@ def _compute_scores(
     Parameters
     ----------
     confusion_matrix: dict[str, int]
-        Counts for true_pos, false_pos, false_neg, true_neg, error
+        Counts for true_positive, false_positive, false_negative, true_negative, error
 
     Returns
     -------
@@ -209,24 +209,24 @@ def _compute_scores(
     f_score: float
 
     """
-    return (
-        _get_precision(confusion_matrix),
-        _get_recall(confusion_matrix),
-        _get_f_score(confusion_matrix),
+    return Scores(
+        precision=_get_precision(confusion_matrix),
+        recall=_get_recall(confusion_matrix),
+        f_score=_get_f_score(confusion_matrix),
     )
 
 
 def _get_precision(confusion_matrix: dict) -> float:
     """Compute precision."""
-    tp = confusion_matrix["true_pos"]
-    fp = confusion_matrix["false_pos"]
+    tp = confusion_matrix["true_positive"]
+    fp = confusion_matrix["false_positive"]
     return tp / (tp + fp) if (tp + fp) else 0.0
 
 
 def _get_recall(confusion_matrix: dict) -> float:
     """Compute recall."""
-    tp = confusion_matrix["true_pos"]
-    fn = confusion_matrix["false_neg"]
+    tp = confusion_matrix["true_positive"]
+    fn = confusion_matrix["false_negative"]
     return tp / (tp + fn) if (tp + fn) else 0.0
 
 
@@ -257,10 +257,10 @@ def _log_detection_results(
         f"{' Detection results ':#^50}\n"
         f"{'Config 1:':<10}{f'{annotator1}/{label1}':>40}\n"
         f"{'Config 2:':<10}{f'{annotator2}/{label2}':>40}\n\n"
-        f"{'True positive:':<25}{matrix['true_pos']:>25}\n"
-        f"{'True negative:':<25}{matrix['true_neg']:>25}\n"
-        f"{'False positive:':<25}{matrix['false_pos']:>25}\n"
-        f"{'False negative:':<25}{matrix['false_neg']:>25}\n\n"
+        f"{'True positive:':<25}{matrix['true_positive']:>25}\n"
+        f"{'True negative:':<25}{matrix['true_negative']:>25}\n"
+        f"{'False positive:':<25}{matrix['false_positive']:>25}\n"
+        f"{'False negative:':<25}{matrix['false_negative']:>25}\n\n"
         f"{'Precision:':<25}{precision:>25.2f}\n"
         f"{'Recall:':<25}{recall:>25.2f}\n"
         f"{'F-score:':<25}{f_score:>25.2f}\n\n"

@@ -485,3 +485,14 @@ def test_polar_creates_polar_axes_when_none(sample_df: DataFrame) -> None:
     ax, _ = polar(sample_df)
 
     assert ax.name == "polar"
+
+
+def test_histo_without_coordinates(ax: Axes, df_counts: DataFrame) -> None:
+    histo(
+        df=df_counts,
+        ax=ax,
+        bin_size=Timedelta("1D"),
+        time_bin=Timedelta("10s"),
+    )
+
+    assert len(ax.patches) == len(df_counts)

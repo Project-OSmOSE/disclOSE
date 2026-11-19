@@ -102,7 +102,7 @@ def histo(
     color = plot_kwargs.get("color")
     season = plot_kwargs.get("season", False)
     effort = plot_kwargs.get("effort")
-    lat, _ = plot_kwargs.get("coordinates")
+    lat, _ = plot_kwargs.get("coordinates") or (None, None)
 
     bin_size_str = get_bin_size_str(bin_size)
 
