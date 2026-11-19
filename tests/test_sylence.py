@@ -31,3 +31,12 @@ def test_clean_pamguard_false_detection_non_default_index() -> None:
     result = clean_pamguard_false_detection(_df([10, 11, 12]))
 
     assert result.index.tolist() == [11]
+
+
+def test_clean_pamguard_false_detection_empty_dataframe() -> None:
+    df = DataFrame(columns=["filename", "start_datetime"])
+
+    result = clean_pamguard_false_detection(df)
+
+    assert result.empty
+    assert result.equals(df)
