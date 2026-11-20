@@ -16,7 +16,7 @@ from pandas import (
 )
 from pandas.tseries import frequencies
 
-from disclose.dataclass.recording_period import RecordingPeriod
+from disclose.dataclass.recording_effort import RecordingEffort
 from disclose.utils.visualisation import (
     _prepare_timeline_plot,
     arc,
@@ -527,7 +527,8 @@ def test_histo_explicit_color_sequence(ax: Axes, sample_df_counts: DataFrame) ->
 
 
 def test_histo_rejects_wrong_number_of_colors(
-    ax: Axes, sample_df_counts: DataFrame
+    ax: Axes,
+    sample_df_counts: DataFrame,
 ) -> None:
     with pytest.raises(ValueError, match=r"Expected 2 colors, got 1\."):
         histo(
@@ -557,7 +558,9 @@ def test_histo_legend_labels(ax: Axes, sample_df_counts: DataFrame):
 
 
 def test_histo_season_southern_hemisphere(
-    ax: Axes, sample_df_counts: DataFrame, monkeypatch
+    ax: Axes,
+    sample_df_counts: DataFrame,
+    monkeypatch,
 ):
     season = Mock()
     monkeypatch.setattr(
@@ -646,7 +649,7 @@ def test_heatmap_coordinates_and_season(ax, sample_df, monkeypatch):
 def test_heatmap_with_effort(
     ax: Axes,
     sample_df: DataFrame,
-    effort: RecordingPeriod,
+    effort: RecordingEffort,
     monkeypatch,
 ):
     shade = Mock()
@@ -670,7 +673,7 @@ def test_heatmap_with_effort(
 def test_timeline_with_effort(
     ax: Axes,
     sample_df: DataFrame,
-    effort: RecordingPeriod,
+    effort: RecordingEffort,
     monkeypatch,
 ):
     shade = Mock()
@@ -715,7 +718,7 @@ def test_set_dynamic_ylim(
 def test_shade_no_effort_partial_effort_legend(
     ax: Axes,
     sample_df_counts: DataFrame,
-    effort: RecordingPeriod,
+    effort: RecordingEffort,
 ):
     histo(
         sample_df_counts,

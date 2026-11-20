@@ -13,8 +13,8 @@ from matplotlib.axes import Axes
 from pandas import DataFrame, Timedelta, Timestamp
 from pandas.tseries import frequencies
 
-from disclose.dataclass.data_aplose import (
-    DataAplose,
+from disclose.dataclass.detection_data import (
+    DetectionData,
     PlotAccessor,
     _get_locator_from_offset,
 )
@@ -22,7 +22,7 @@ from disclose.utils.filtering import get_timezone
 
 
 def test_empty_DataAplose() -> None:
-    data = DataAplose()
+    data = DetectionData()
     assert data.df.empty
     assert data.annotator is None
     assert data.label is None
@@ -34,7 +34,7 @@ def test_empty_DataAplose() -> None:
 
 
 def test_data_aplose_str(sample_df: DataFrame) -> None:
-    obj = DataAplose(sample_df)
+    obj = DetectionData(sample_df)
 
     expected = (
         f"start_datetime: {obj.start_datetime}\n"
@@ -48,7 +48,7 @@ def test_data_aplose_str(sample_df: DataFrame) -> None:
 
 
 def test_data_aplose_init(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     assert isinstance(data.df, DataFrame)
     assert sorted(data.annotator) == ["ann1", "ann2", "ann3", "ann4", "ann5", "ann6"]
     assert sorted(data.label) == ["lbl1", "lbl2", "lbl3"]
@@ -80,7 +80,7 @@ def test_data_aplose_init(sample_df: DataFrame) -> None:
     ],
 )
 def test_coordinates_setter(value: tuple, expected_msg: str | None) -> None:
-    obj = DataAplose()
+    obj = DetectionData()
 
     if expected_msg is None:
         obj.coordinates = value
@@ -91,7 +91,7 @@ def test_coordinates_setter(value: tuple, expected_msg: str | None) -> None:
 
 
 def test_filter_df_single_pair(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     filtered_data = data.filter_df(annotator="ann1", label="lbl1")
     assert sorted(set(filtered_data["label"])) == ["lbl1"]
     assert sorted(set(filtered_data["annotator"])) == ["ann1"]
@@ -102,7 +102,7 @@ def test_filter_df_single_pair(sample_df: DataFrame) -> None:
 
 
 def test_change_tz(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     new_tz = "Etc/GMT-7"
     data.change_tz(new_tz)
     start_dt = data.df["start_datetime"]
@@ -122,7 +122,7 @@ def test_change_tz(sample_df: DataFrame) -> None:
 
 
 def test_filter_df_multiple_pairs(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     filtered_data = data.filter_df(annotator=["ann1", "ann2"], label=["lbl1", "lbl2"])
     assert sorted(set(filtered_data["label"])) == ["lbl1", "lbl2"]
     assert sorted(set(filtered_data["annotator"])) == ["ann1", "ann2"]
@@ -134,7 +134,7 @@ def test_filter_df_multiple_pairs(sample_df: DataFrame) -> None:
 
 
 def test_filter_df_invalid_annotator(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     with pytest.raises(
         ValueError,
         match='Annotator "bbjuni" not in APLOSE DataFrame',
@@ -143,7 +143,7 @@ def test_filter_df_invalid_annotator(sample_df: DataFrame) -> None:
 
 
 def test_filter_df_invalid_label(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     with pytest.raises(
         ValueError,
         match='Label "cool" not in APLOSE DataFrame',
@@ -154,7 +154,7 @@ def test_filter_df_invalid_label(sample_df: DataFrame) -> None:
 def test_filter_df_invalid_combination(
     sample_df: DataFrame,
 ) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     with pytest.raises(
         ValueError,
         match=r"DataFrame with annotator 'ann1' /"
@@ -166,7 +166,7 @@ def test_filter_df_invalid_combination(
 def test_filter_df_invalid_lists_size(
     sample_df: DataFrame,
 ) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     with pytest.raises(
         ValueError,
         match=r"Length of annotator \(2\) and label \(1\) must match.",
@@ -175,7 +175,7 @@ def test_filter_df_invalid_lists_size(
 
 
 def test_set_ax_uses_2hour_locator(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     _, ax = plt.subplots()
     tick_freq = frequencies.to_offset("2h")
 
@@ -196,7 +196,7 @@ def test_histo(sample_csv_result: DataFrame, recording_planning_csv: DataFrame) 
         "filename_format": "%Y_%m_%d_%H_%M_%S",
         "recording_file": recording_planning_csv,
     }
-    data = DataAplose.from_dict(dict_test)
+    data = DetectionData.from_dict(dict_test)
     _, ax = plt.subplots()
     bin_size = Timedelta("1h")
     tick_freq = frequencies.to_offset("2h")
@@ -223,7 +223,7 @@ def test_histo_no_recording_file_provided(
         "filename_format": "%Y_%m_%d_%H_%M_%S",
         "recording_file": None,
     }
-    data = DataAplose.from_dict(dict_test)
+    data = DetectionData.from_dict(dict_test)
     _, ax = plt.subplots()
     bin_size = Timedelta("1h")
     tick_freq = frequencies.to_offset("2h")
@@ -251,7 +251,7 @@ def test_histo_no_recording_fake_file_provided(
         "filename_format": "%Y_%m_%d_%H_%M_%S",
         "recording_file": Path("fake_file.csv"),
     }
-    data = DataAplose.from_dict(dict_test)
+    data = DetectionData.from_dict(dict_test)
     _, ax = plt.subplots()
     bin_size = Timedelta("1h")
     tick_freq = frequencies.to_offset("2h")
@@ -271,7 +271,7 @@ def test_histo_no_recording_fake_file_provided(
 
 
 def test_heatmap_wrong_bin(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     data.lon = 0
     data.lat = 0
     bins = frequencies.to_offset("10s")
@@ -289,15 +289,15 @@ def test_heatmap_wrong_bin(sample_df: DataFrame) -> None:
 
 
 def test_plot_histogram_missing_bin_size(monkeypatch, sample_df: DataFrame) -> None:
-    obj = DataAplose(sample_df)
+    obj = DetectionData(sample_df)
 
     monkeypatch.setattr(obj, "filter_df", lambda annotator, label: sample_df)
     monkeypatch.setattr(
-        "disclose.dataclass.data_aplose.histo",
+        "disclose.dataclass.detection_data.histo",
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
-        "disclose.dataclass.data_aplose.get_count",
+        "disclose.dataclass.detection_data.get_count",
         lambda *args, **kwargs: None,
     )
 
@@ -315,7 +315,7 @@ def test_plot_histogram_missing_bin_size(monkeypatch, sample_df: DataFrame) -> N
 
 
 def test_plot_agreement_missing_bin_size(monkeypatch, sample_df: DataFrame) -> None:
-    obj = DataAplose(sample_df)
+    obj = DetectionData(sample_df)
 
     monkeypatch.setattr(obj, "filter_df", lambda annotator, label: sample_df)
 
@@ -331,7 +331,7 @@ def test_plot_agreement_missing_bin_size(monkeypatch, sample_df: DataFrame) -> N
 
 
 def test_plot_agreement(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     _, ax = plt.subplots()
     data.plot.agreement(
         ax=ax,
@@ -342,7 +342,7 @@ def test_plot_agreement(sample_df: DataFrame) -> None:
 
 
 def test_set_ax(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     _, ax = plt.subplots()
     ax = data.plot.set_ax(ax, Timedelta("7h"), "%Y-%m-%d")
     locator = ax.xaxis.get_major_locator()
@@ -353,9 +353,9 @@ def test_from_dict(
     sample_dict: dict,
     sample_df: DataFrame,
 ) -> None:
-    df_from_dict = DataAplose.from_dict(sample_dict).df
+    df_from_dict = DetectionData.from_dict(sample_dict).df
     df_expected = (
-        DataAplose(sample_df)
+        DetectionData(sample_df)
         .filter_df(annotator="ann1", label="lbl1")
         .reset_index(drop=True)
     )
@@ -366,7 +366,7 @@ def test_from_dict_concat(
     sample_dict: dict,
     sample_df: DataFrame,
 ) -> None:
-    data_expected = DataAplose.from_dict(sample_dict)
+    data_expected = DetectionData.from_dict(sample_dict)
     start = data_expected.start_datetime
     end = data_expected.end_datetime
     median_time = start + (end - start) / 2
@@ -386,7 +386,7 @@ def test_from_dict_concat(
             "label": sample_dict["label"],
         },
     ]
-    data_concat = DataAplose.from_dict(config, merge=True)
+    data_concat = DetectionData.from_dict(config, merge=True)
 
     assert all(data_expected.df == data_concat.df)
     assert repr(data_expected) == repr(data_concat)
@@ -396,7 +396,7 @@ def test_from_dict_no_concat(
     sample_dict: dict,
     sample_df: DataFrame,
 ) -> None:
-    data_expected = DataAplose.from_dict(sample_dict)
+    data_expected = DetectionData.from_dict(sample_dict)
     start = data_expected.start_datetime
     end = data_expected.end_datetime
     median_time = start + (end - start) / 2
@@ -416,19 +416,19 @@ def test_from_dict_no_concat(
             "label": sample_dict["label"],
         },
     ]
-    data_concat = DataAplose.from_dict(config, merge=False)
+    data_concat = DetectionData.from_dict(config, merge=False)
 
     assert isinstance(data_concat, list)
     assert len(data_concat) == len(config)
-    assert [isinstance(data, DataAplose) for data in data_concat]
+    assert [isinstance(data, DetectionData) for data in data_concat]
 
 
 def test_concatenate(sample_dict: Path, sample_df: DataFrame) -> None:
-    data1 = DataAplose(sample_df.loc[: len(sample_df) / 2])
-    data2 = DataAplose(sample_df.loc[len(sample_df) / 2 :])
+    data1 = DetectionData(sample_df.loc[: len(sample_df) / 2])
+    data2 = DetectionData(sample_df.loc[len(sample_df) / 2 :])
 
-    data_concat = DataAplose.merge([data1, data2])
-    expected = DataAplose(sample_df)
+    data_concat = DetectionData.merge([data1, data2])
+    expected = DetectionData(sample_df)
 
     attrs = [
         name
@@ -447,12 +447,12 @@ def test_concatenate(sample_dict: Path, sample_df: DataFrame) -> None:
 
 
 def test_concatenate_change_tz(sample_df: DataFrame, caplog) -> None:
-    data1 = DataAplose(sample_df.loc[: len(sample_df) / 2])
+    data1 = DetectionData(sample_df.loc[: len(sample_df) / 2])
     data1.change_tz(pytz.timezone("Etc/GMT-7"))
-    data2 = DataAplose(sample_df.loc[len(sample_df) / 2 :])
+    data2 = DetectionData(sample_df.loc[len(sample_df) / 2 :])
 
     with caplog.at_level(logging.INFO):
-        data_concat = DataAplose.merge([data1, data2])
+        data_concat = DetectionData.merge([data1, data2])
 
     assert get_timezone(data_concat.df) == pytz.utc
     assert (
@@ -464,7 +464,7 @@ def test_concatenate_change_tz(sample_df: DataFrame, caplog) -> None:
 # %% overview
 
 
-def test_data_aplose_overview(sample_data_aplose: DataAplose) -> None:
+def test_data_aplose_overview(sample_data_aplose: DetectionData) -> None:
     expected = (
         DataFrame(
             {
@@ -484,7 +484,7 @@ def test_data_aplose_overview(sample_data_aplose: DataAplose) -> None:
 
 # %% detection_perf
 def test_detection_perf_multiple_timebins(sample_df: DataFrame) -> None:
-    obj = DataAplose(sample_df)
+    obj = DetectionData(sample_df)
 
     with pytest.raises(ValueError, match="Multiple time bins detected"):
         obj.detection_perf(
@@ -501,7 +501,7 @@ def test_detection_perf(sample_csv_result: Path, recording_planning_csv: Path) -
         "recording_file": recording_planning_csv,
     }
 
-    obj = DataAplose.from_dict(config=config)
+    obj = DetectionData.from_dict(config=config)
 
     obj.detection_perf(
         annotator=("ann1", "ann2"),
@@ -551,7 +551,7 @@ def test_detection_perf(sample_csv_result: Path, recording_planning_csv: Path) -
     ],
 )
 def test_reshape_errors(
-    sample_data_aplose: DataAplose,
+    sample_data_aplose: DetectionData,
     begin: Timestamp | None,
     end: Timestamp | None,
     expected: ContextManager[Exception],
@@ -621,7 +621,7 @@ def test_reshape_errors(
     ],
 )
 def test_reshape_valid_cases(
-    sample_data_aplose: DataAplose,
+    sample_data_aplose: DetectionData,
     begin: Timestamp | None,
     end: Timestamp | None,
     should_filter: bool,
@@ -708,7 +708,7 @@ def test_polar_plot(sample_csv_result: Path, polar_ax: Axes) -> None:
         "timebin_new": Timedelta(seconds=60),
     }
 
-    obj = DataAplose.from_dict(config=config)
+    obj = DetectionData.from_dict(config=config)
 
     obj.plot.polar(
         annotator="ann1",
@@ -728,7 +728,7 @@ def test_scatter_plot(sample_csv_result: Path, recording_planning_csv: Path) -> 
         "recording_file": recording_planning_csv,
     }
 
-    obj = DataAplose.from_dict(config=config)
+    obj = DetectionData.from_dict(config=config)
     _, ax = plt.subplots()
 
     obj.plot.scatter(
@@ -752,7 +752,7 @@ def test_timeline_plot(sample_csv_result: Path) -> None:
         "timebin_new": Timedelta(seconds=60),
     }
 
-    obj = DataAplose.from_dict(config=config)
+    obj = DetectionData.from_dict(config=config)
     _, ax = plt.subplots()
 
     obj.plot.timeline(
@@ -773,18 +773,18 @@ def test_post_init_missing_columns(sample_df: DataFrame) -> None:
         ValueError,
         match=r"not APLOSE-formatted, missing columns: \['label', 'annotator'\]",
     ):
-        DataAplose(incomplete)
+        DetectionData(incomplete)
 
 
 def test_localize_keeps_aware_timestamp(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     aware = Timestamp("2025-01-01 00:00:00", tz="Etc/GMT-7")
 
     assert data._localize(aware) == aware
 
 
 def test_localize_uses_data_timezone(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     data.change_tz(pytz.timezone("Etc/GMT-7"))
 
     localized = data._localize(Timestamp("2025-01-01 00:00:00"))
@@ -793,9 +793,9 @@ def test_localize_uses_data_timezone(sample_df: DataFrame) -> None:
 
 
 def test_localize_several_timezones(sample_df: DataFrame, monkeypatch) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     monkeypatch.setattr(
-        "disclose.dataclass.data_aplose.get_timezone",
+        "disclose.dataclass.detection_data.get_timezone",
         lambda _: [pytz.utc, pytz.timezone("Etc/GMT-7")],
     )
 
@@ -807,9 +807,9 @@ def test_reshape_naive_bounds_with_several_timezones(
     sample_df: DataFrame,
     monkeypatch,
 ) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     monkeypatch.setattr(
-        "disclose.dataclass.data_aplose.get_timezone",
+        "disclose.dataclass.detection_data.get_timezone",
         lambda _: [pytz.utc, pytz.timezone("Etc/GMT-7")],
     )
 
@@ -839,23 +839,23 @@ def test_merge_coordinates(
     expected: tuple[float | None, float | None],
 ) -> None:
     half = len(sample_df) // 2
-    data1 = DataAplose(sample_df.iloc[:half])
-    data2 = DataAplose(sample_df.iloc[half:])
+    data1 = DetectionData(sample_df.iloc[:half])
+    data2 = DetectionData(sample_df.iloc[half:])
     for data, coord in zip((data1, data2), coordinates, strict=True):
         if coord is not None:
             data.coordinates = coord
 
-    merged = DataAplose.merge([data1, data2])
+    merged = DetectionData.merge([data1, data2])
 
     assert merged.coordinates == expected
 
 
 def test_merge_empty_list() -> None:
     with pytest.raises(ValueError, match="No DataAplose to merge"):
-        DataAplose.merge([])
+        DetectionData.merge([])
 
 
-def test_copy_is_independent(sample_data_aplose: DataAplose) -> None:
+def test_copy_is_independent(sample_data_aplose: DetectionData) -> None:
     sample_data_aplose.coordinates = (48.39, -4.49)
     sample_data_aplose.reshape(
         start_datetime=Timestamp("2025-01-25 06:20:00", tz="UTC"),
@@ -880,7 +880,7 @@ def test_copy_is_independent(sample_data_aplose: DataAplose) -> None:
 
 
 def test_reshape_empty_dataframe_is_noop() -> None:
-    data = DataAplose()
+    data = DetectionData()
 
     result = data.reshape(
         start_datetime=Timestamp("2025-01-01", tz="UTC"),
@@ -894,7 +894,7 @@ def test_reshape_empty_dataframe_is_noop() -> None:
 
 
 def test_reshape_without_bounds_is_noop(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
 
     result = data.reshape()
 
@@ -905,7 +905,7 @@ def test_reshape_without_bounds_is_noop(sample_df: DataFrame) -> None:
 def test_filter_returns_independent_filtered_instance(
     sample_df: DataFrame,
 ) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     data.coordinates = (48.39, -4.49)
     n_rows = len(data.df)
 
@@ -921,7 +921,7 @@ def test_filter_returns_independent_filtered_instance(
 
 
 def test_filter_multiple_pairs(sample_df: DataFrame) -> None:
-    filtered = DataAplose(sample_df).filter(["ann1", "ann2"], ["lbl1", "lbl2"])
+    filtered = DetectionData(sample_df).filter(["ann1", "ann2"], ["lbl1", "lbl2"])
 
     pairs = set(zip(filtered.df["annotator"], filtered.df["label"], strict=True))
     assert pairs == {("ann1", "lbl1"), ("ann2", "lbl2")}
@@ -929,7 +929,7 @@ def test_filter_multiple_pairs(sample_df: DataFrame) -> None:
 
 def test_filter_unknown_annotator(sample_df: DataFrame) -> None:
     with pytest.raises(ValueError, match='Annotator "nobody" not in APLOSE'):
-        DataAplose(sample_df).filter("nobody", "lbl1")
+        DetectionData(sample_df).filter("nobody", "lbl1")
 
 
 # %% PlotAccessor
@@ -941,7 +941,7 @@ def test_plot_call_dispatches_to_method(
     monkeypatch,
     kind: str,
 ) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     calls: list[tuple] = []
     monkeypatch.setattr(
         type(data.plot),
@@ -957,7 +957,7 @@ def test_plot_call_dispatches_to_method(
 
 def test_plot_call_unknown_kind(sample_df: DataFrame) -> None:
     with pytest.raises(ValueError, match="Unknown plot kind 'pie'"):
-        DataAplose(sample_df).plot("pie")
+        DetectionData(sample_df).plot("pie")
 
 
 def test_get_ax_returns_provided_axes(ax: Axes) -> None:
@@ -991,7 +991,7 @@ def test_coordinates_required_but_missing(
     sample_df: DataFrame,
     coordinates: tuple[float | None, float | None],
 ) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     data.lat, data.lon = coordinates
 
     with pytest.raises(ValueError, match="Coordinates are required"):
@@ -999,14 +999,14 @@ def test_coordinates_required_but_missing(
 
 
 def test_coordinates_not_required_returns_unset(sample_df: DataFrame) -> None:
-    assert DataAplose(sample_df).plot._coordinates(None, required=False) == (
+    assert DetectionData(sample_df).plot._coordinates(None, required=False) == (
         None,
         None,
     )
 
 
 def test_coordinates_override_takes_precedence(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df)
+    data = DetectionData(sample_df)
     data.coordinates = (48.39, -4.49)
 
     assert data.plot._coordinates((43.0, 5.0), required=True) == (43.0, 5.0)

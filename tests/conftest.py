@@ -10,9 +10,9 @@ from matplotlib.axes import Axes
 from osekit.utils.timestamp import strftime_osmose_format
 from pandas import DataFrame, DatetimeIndex, Timedelta, date_range, read_csv
 
-from disclose.dataclass.data_aplose import DataAplose
-from disclose.dataclass.data_aplose_config import DataAploseConfig
-from disclose.dataclass.recording_period import RecordingPeriod
+from disclose.dataclass.detection_config import DetectionConfig
+from disclose.dataclass.detection_data import DetectionData
+from disclose.dataclass.recording_effort import RecordingEffort
 from disclose.utils.core import get_count
 
 SAMPLE = """dataset,filename,start_time,end_time,min_frequency,max_frequency,label,annotator,start_datetime,end_datetime,type,confidence
@@ -153,13 +153,13 @@ def sample_df() -> DataFrame:
 
 
 @pytest.fixture
-def sample_data_aplose(sample_csv_result: Path) -> DataAplose | list[DataAplose]:
+def sample_data_aplose(sample_csv_result: Path) -> DetectionData | list[DetectionData]:
     config = {
         "detection_file": sample_csv_result,
         "filename_format": "%Y_%m_%d_%H_%M_%S",
         "timebin_new": Timedelta(seconds=60),
     }
-    return DataAplose.from_dict(config=config)
+    return DetectionData.from_dict(config=config)
 
 
 @pytest.fixture
@@ -281,15 +281,15 @@ def recording_planning_csv(tmp_path) -> Path:
 def effort(
     sample_csv_result: Path,
     recording_planning_csv: Path,
-) -> RecordingPeriod:
+) -> RecordingEffort:
     dict_test = {
         "detection_file": sample_csv_result,
         "filename_format": "%Y_%m_%d_%H_%M_%S_%f%z",
         "recording_file": recording_planning_csv,
     }
-    config = DataAploseConfig(**dict_test)
+    config = DetectionConfig(**dict_test)
 
-    return RecordingPeriod.from_config(
+    return RecordingEffort.from_config(
         config=config,
         bin_size=Timedelta("1h"),
     )

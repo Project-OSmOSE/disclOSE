@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from pandas.tseries.offsets import BaseOffset
 
-    from disclose.dataclass.recording_period import RecordingPeriod
+    from disclose.dataclass.recording_effort import RecordingEffort
 
 default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
@@ -334,7 +334,7 @@ def scatter(
     df: DataFrame,
     ax: Axes,
     time_range: DatetimeIndex,
-    **kwargs: bool | tuple[float, float] | RecordingPeriod,
+    **kwargs: bool | tuple[float, float] | RecordingEffort,
 ) -> None:
     """Scatter-plot of detections for a given annotator and label.
 
@@ -724,7 +724,7 @@ def set_plot_title(ax: Axes, annotators: list[str], labels: list[str]) -> None:
 
 def shade_no_effort(
     ax: Axes,
-    observed: RecordingPeriod,
+    observed: RecordingEffort,
     legend: bool = True,
     **kwargs: Any,
 ) -> None:
@@ -734,7 +734,7 @@ def shade_no_effort(
     ----------
     ax : plt.Axes
         The axes on which to draw the shaded regions.
-    observed : RecordingPeriod
+    observed : RecordingEffort
         A Series with observation counts or flags, indexed by datetime.
         Should be aligned or re-indexable to `bin_starts`.
     legend : bool

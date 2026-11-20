@@ -27,7 +27,7 @@ from disclose.utils.core import build_time_vector, get_count
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from disclose.dataclass.data_aplose_config import DataAploseConfig
+    from disclose.dataclass.detection_config import DetectionConfig
 
 
 def find_delimiter(file: Path) -> str:
@@ -680,12 +680,12 @@ def ensure_no_invalid(invalid: list[str], label: str) -> None:
         raise ValueError(msg)
 
 
-def load_detections(config: DataAploseConfig) -> DataFrame:
+def load_detections(config: DetectionConfig) -> DataFrame:
     """Load and filter an APLOSE-formatted detection file.
 
     Parameters
     ----------
-    config : DataAploseConfig
+    config : DetectionConfig
         Data configuration for loading and filtering detections.
 
     Returns

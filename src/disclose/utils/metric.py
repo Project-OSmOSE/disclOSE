@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import logging
-from typing import TypedDict, NamedTuple
+from typing import NamedTuple, TypedDict
 
-from pandas import Timestamp, Series, DataFrame, DatetimeIndex
+from pandas import DataFrame, DatetimeIndex, Series, Timestamp
 
-from disclose.dataclass.recording_period import RecordingPeriod
+from disclose.dataclass.recording_effort import RecordingEffort
 from disclose.utils.core import get_count
-
 from disclose.utils.filtering import (
     get_annotators,
     get_labels,
@@ -157,7 +156,7 @@ def get_detection_timestamps(
     *,
     ref: tuple[str, str],
     time: DatetimeIndex | None = None,
-    effort: RecordingPeriod | None = None,
+    effort: RecordingEffort | None = None,
 ) -> dict[str, list[Timestamp]]:
     """Retrieve the timestamps classified as true_positive/false_positive/false_negative/true_negative/error.
 
@@ -172,7 +171,7 @@ def get_detection_timestamps(
         Reference annotator/label pair
     time: DatetimeIndex
         DatetimeIndex from a specified beginning to end
-    effort: RecordingPeriod
+    effort: RecordingEffort
         Recording effort period
 
     Returns
@@ -241,7 +240,7 @@ def _log_detection_results(
     selection2: tuple[str, str],
     matrix: dict,
     df: DataFrame,
-    effort: RecordingPeriod | None = None,
+    effort: RecordingEffort | None = None,
 ) -> None:
     """Log detection performance results."""
     annotator1, label1 = selection1
@@ -272,7 +271,7 @@ def detection_perf(
     *,
     ref: tuple[str, str],
     time: DatetimeIndex | None = None,
-    effort: RecordingPeriod | None = None,
+    effort: RecordingEffort | None = None,
 ) -> tuple[Scores, ConfusionMatrix, Classification]:
     """Compute the performance metrics for detection.
 
@@ -287,7 +286,7 @@ def detection_perf(
         Tuple of annotator/detector pairs.
     time: DatetimeIndex
         DatetimeIndex from a specified beginning to end
-    effort: RecordingPeriod
+    effort: RecordingEffort
         Recording effort period
 
     Returns
