@@ -1,22 +1,19 @@
-"""Plot functions used for DataAplose objects."""
-
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, NamedTuple, TypedDict
+from typing import TypedDict, NamedTuple
 
+from pandas import Timestamp, Series, DataFrame, DatetimeIndex
+
+from disclose.dataclass.recording_period import RecordingPeriod
 from disclose.utils.core import get_count
+
 from disclose.utils.filtering import (
     get_annotators,
     get_labels,
     get_max_time,
     intersection_or_union,
 )
-
-if TYPE_CHECKING:
-    from pandas import DataFrame, DatetimeIndex, Series, Timestamp
-
-    from disclose.dataclass.recording_period import RecordingPeriod
 
 
 class Classification(TypedDict):
