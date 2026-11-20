@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import gzip
-from os import PathLike
 from typing import TYPE_CHECKING
 
 import gpxpy
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-from pandas import DataFrame, Timedelta, Timestamp, concat
+from pandas import DataFrame, Timedelta, Timestamp, concat, read_csv, to_datetime
 from tqdm import tqdm
 
 from disclose.dataclass.trajectory import Trajectory
-from disclose.glider_config import NAV_STATE
+from disclose.instrument.glider import NAV_STATE
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -23,7 +21,7 @@ if TYPE_CHECKING:
     from numpy.lib.npyio import NpzFile
 
 
-def set_trajectory(nav: pd.DataFrame) -> Trajectory:
+def set_trajectory(nav: DataFrame) -> Trajectory:
     """Create a Trajectory object in order to track data.
 
     Parameters
@@ -192,7 +190,7 @@ def load_glider_nav(directory: Path) -> DataFrame:
     for f in tqdm(file, desc="Reading navigation data", unit="file"):
         with gzip.open(f, "rt") as gz_file:
             delimiter = ";"  # Specify the desired delimiter
-            gz_reader = pd.read_csv(gz_file, delimiter=delimiter)
+            gz_reader = read_csv(gz_file, delimiter=delimiter)
             # If it's the first file, append the header row
             if first_file:
                 all_rows.append(gz_reader.columns.tolist())
@@ -205,7 +203,7 @@ def load_glider_nav(directory: Path) -> DataFrame:
             file_number += 1  # Increment the file number for the next file
 
     # Create a DataFrame from the combined data
-    df_nav = pd.DataFrame(all_rows)
+    df_nav = DataFrame(all_rows)
     df_nav.columns = df_nav.iloc[0]  # set 1st row as headers
     df_nav = df_nav.iloc[1:, 0:-1]  # delete last column and 1st row
 
@@ -228,7 +226,7 @@ def load_glider_nav(directory: Path) -> DataFrame:
     df_nav["Depth"] = -df_nav["Depth"]
     df_nav["NavState"] = df_nav["NavState"].replace(NAV_STATE)
     df_nav["Timestamp"] = [
-        pd.to_datetime(ts, format="%d/%m/%Y %H:%M:%S").tz_localize("UTC")
+        to_datetime(ts, format="%d/%m/%Y %H:%M:%S").tz_localize("UTC")
         for ts in df_nav["Timestamp"]
     ]
 
@@ -353,7 +351,7 @@ def compute_acoustic_diversity(
     return df_acoustic_diversity
 
 
-def export_gpx(nav: DataFrame, path: PathLike) -> None:
+def export_gpx(nav: DataFrame, path: Path) -> None:
     """Export a navigation DataFrame to a GPX file.
 
     Creates a GPX track from latitude, longitude, depth, and timestamp values
@@ -363,7 +361,7 @@ def export_gpx(nav: DataFrame, path: PathLike) -> None:
     ----------
     nav : DataFrame
         Navigation data with required columns: ["Lat", "Lon", "Depth", "Timestamp"].
-    output_dir : PathLike
+    output_dir : Path
         Output path of the export GPX file.
 
     """

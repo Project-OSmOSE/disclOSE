@@ -1,7 +1,6 @@
 """`data_aplose` module provides the `DataAplose` class.
 
 `DataAplose` handles, analyzes and visualizes APLOSE-formatted detection data.
-Plotting lives in a pandas-like accessor (`DataAplose.plot`), e.g.:
 
 >>> data = DataAplose.from_dict({"detection_file": Path("results.csv"), ...})
 >>> data.coordinates = (48.39, -4.49)
@@ -39,7 +38,12 @@ from disclose.utils.filtering import (
     get_timezone,
     load_detections,
 )
-from disclose.utils.metric import detection_perf
+from disclose.utils.metric import (
+    detection_perf,
+    Classification,
+    ConfusionMatrix,
+    Scores,
+)
 from disclose.utils.visualisation import (
     heatmap,
     histo,
@@ -58,7 +62,6 @@ if TYPE_CHECKING:
     from pandas import Series, Timestamp
     from pandas.tseries.offsets import BaseOffset
 
-    from disclose.utils.metric import Classification, ConfusionMatrix, Scores
 
 logger = logging.getLogger(__name__)
 plt.ioff()
@@ -158,10 +161,11 @@ class DataAplose:
 
     Examples
     --------
+    >>> from disclose.utils import metric
     >>> data = DataAplose.from_dict({"detection_file": Path("results.csv")})
     >>> data.coordinates = (48.39, -4.49)
     >>> data.change_tz("Europe/Paris")
-    >>> perf = data.detection_perf(("ann1", "ann2"), ("lbl1", "lbl1"))
+    >>> perf = metrics.detection_perf(("ann1", "ann2"), ("lbl1", "lbl1"))
     >>> _, ax = plt.subplots()
     >>> data.plot.histogram("ann1", "lbl1", Timedelta("1D"), ax=ax, season=True)
 

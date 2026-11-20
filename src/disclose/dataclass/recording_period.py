@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pandas import (
@@ -21,12 +20,15 @@ from pandas import (
     to_datetime,
 )
 
-from disclose.dataclass.data_aplose_config import DataAploseConfig
 from disclose.utils.core import round_begin_end_timestamps
 from disclose.utils.filtering import find_delimiter
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from pandas.tseries.offsets import BaseOffset
+
+    from disclose.dataclass.data_aplose_config import DataAploseConfig
 
 
 @dataclass(frozen=True)
@@ -73,10 +75,12 @@ class RecordingPeriod:
         recording_file = config.recording_file
 
         if not recording_file:
-            raise ValueError("No recording file provided.")
+            msg = "No recording file provided."
+            raise ValueError(msg)
 
         if not recording_file.exists():
-            raise FileNotFoundError(f"File not found: {recording_file}")
+            msg = f"File not found: {recording_file}"
+            raise FileNotFoundError(msg)
 
         df = cls.from_csv(recording_file)
 
@@ -168,19 +172,16 @@ class RecordingPeriod:
         with json_file.open() as f:
             data = json.load(f)
 
-        series_list = []
-        for datum in data:
-            series_list.append(
-                Series({
-                    "start_recording": datum["channel_configurations"][0][
-                        "record_start_date"
-                    ],
-                    "end_recording": datum["channel_configurations"][0][
-                        "record_end_date"
-                    ],
-                    "start_deployment": datum["deployment_date"],
-                    "end_deployment": datum["recovery_date"],
-                }),
-            )
+        series_list = [
+            Series({
+                "start_recording": datum["channel_configurations"][0][
+                    "record_start_date"
+                ],
+                "end_recording": datum["channel_configurations"][0]["record_end_date"],
+                "start_deployment": datum["deployment_date"],
+                "end_deployment": datum["recovery_date"],
+            })
+            for datum in data
+        ]
 
         return DataFrame(series_list)
