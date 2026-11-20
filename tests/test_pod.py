@@ -7,27 +7,27 @@ from types import SimpleNamespace
 
 import pytest
 import pytz
-from pandas import DataFrame, Series, Timedelta, Timestamp
-from numpy import array, allclose, exp
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from numpy import allclose, array, exp
+from pandas import DataFrame, Series, Timedelta, Timestamp
 
 from disclose.utils.pod import (
     _mixture_density,
+    _shade_missing_bars,
     calendar,
     cluster_info,
-    gmm_feeding_buzz,
-    percent_barplot,
-    plot_gmm_ici,
     compute_ici,
     create_matrix,
+    fit_gmm,
     get_feeding_buzz_datetime,
     get_group_colors,
-    percent_calc,
-    _shade_missing_bars,
-    fit_gmm,
+    gmm_feeding_buzz,
     load_pod_folder,
+    percent_barplot,
+    percent_calc,
+    plot_gmm_ici,
     pod2aplose,
     process_feeding_buzz,
     process_timelost,
@@ -573,7 +573,7 @@ def test_compute_ici() -> None:
             Timestamp("2024-01-01 00:01:00"),
             Timestamp("2024-01-01 00:01:00"),
             Timestamp("2024-01-01 00:03:00"),
-        ]
+        ],
     })
     result = compute_ici(df)
     assert result["ICI_minutes"].tolist() == [1.0, 2.0]
