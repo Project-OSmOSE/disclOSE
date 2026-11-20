@@ -1,6 +1,6 @@
-"""`recording_period` module provides `RecordingPeriod` dataclass.
+"""`recording_period` module provides `RecordingEffort` dataclass.
 
-RecordingPeriod class returns a Timestamp list corresponding to recording periods.
+RecordingEffort class returns a Timestamp list corresponding to recording periods.
 """
 
 from __future__ import annotations
@@ -28,11 +28,11 @@ if TYPE_CHECKING:
 
     from pandas.tseries.offsets import BaseOffset
 
-    from disclose.dataclass.data_aplose_config import DataAploseConfig
+    from disclose.dataclass.detection_config import DetectionConfig
 
 
 @dataclass(frozen=True)
-class RecordingPeriod:
+class RecordingEffort:
     """Represents recording effort over time, aggregated into bins."""
 
     counts: Series
@@ -41,10 +41,10 @@ class RecordingPeriod:
     @classmethod
     def from_config(
         cls,
-        config: DataAploseConfig,
+        config: DetectionConfig,
         *,
         bin_size: Timedelta | BaseOffset,
-    ) -> RecordingPeriod:
+    ) -> RecordingEffort:
         """Vectorised creation of recording coverage from CSV with start/end datetimes.
 
         This method reads a CSV with columns:
@@ -66,7 +66,7 @@ class RecordingPeriod:
 
         Returns
         -------
-        RecordingPeriod
+        RecordingEffort
             Object containing `counts` (Series indexed by IntervalIndex) and
             `timebin_origin`.
 

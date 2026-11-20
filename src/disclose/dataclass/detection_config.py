@@ -9,7 +9,7 @@ from disclose.utils.filtering import get_max_time, read_dataframe
 
 
 @dataclass(slots=True)
-class DataAploseConfig:
+class DetectionConfig:
     """Configuration object for loading and filtering APLOSE-formatted detection data.
 
     Parameters
@@ -65,14 +65,14 @@ class DataAploseConfig:
             object.__setattr__(self, "timebin_origin", get_max_time(df))
 
     @classmethod
-    def empty(cls) -> DataAploseConfig:
+    def empty(cls) -> DetectionConfig:
         return cls()
 
     @classmethod
     def from_dict(
         cls,
         config: dict | list[dict],
-    ) -> DataAploseConfig | list[DataAploseConfig]:
+    ) -> DetectionConfig | list[DetectionConfig]:
         """Build one or more configuration objects from dictionaries."""
         if isinstance(config, dict):
             return cls(**config)
@@ -80,7 +80,7 @@ class DataAploseConfig:
         return [cls(**c) for c in config]
 
     @classmethod
-    def merge(cls, configs: list[DataAploseConfig]) -> DataAploseConfig:
+    def merge(cls, configs: list[DetectionConfig]) -> DetectionConfig:
         """Merge several configurations."""
         if not configs:
             return cls.empty()

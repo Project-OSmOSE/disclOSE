@@ -6,8 +6,8 @@ from pandas import DataFrame, IntervalIndex, Series, Timedelta, Timestamp, date_
 from pandas.tseries import frequencies
 from pytz import timezone
 
-from disclose.dataclass.data_aplose import DataAplose
-from disclose.dataclass.recording_period import RecordingPeriod
+from disclose.dataclass.detection_data import DetectionData
+from disclose.dataclass.recording_effort import RecordingEffort
 from disclose.utils.core import (
     add_recording_period,
     add_season_period,
@@ -113,7 +113,7 @@ def test_get_sun_times_naive_timestamps(
 
 
 def test_get_count_basic(sample_df: DataFrame) -> None:
-    df = DataAplose(sample_df).filter_df(annotator="ann1", label="lbl1")
+    df = DetectionData(sample_df).filter_df(annotator="ann1", label="lbl1")
     result = get_count(df, bin_size=Timedelta("1min"))
     expected = sample_df[
         (sample_df["annotator"] == "ann1") & (sample_df["label"] == "lbl1")
@@ -131,7 +131,7 @@ def test_get_count_basic(sample_df: DataFrame) -> None:
 
 
 def test_get_count_multiple_annotators(sample_df: DataFrame) -> None:
-    df = DataAplose(sample_df).filter_df(annotator=["ann1", "ann2"], label="lbl1")
+    df = DetectionData(sample_df).filter_df(annotator=["ann1", "ann2"], label="lbl1")
     result = get_count(df, bin_size=Timedelta("1D"))
     expected = sample_df[
         (sample_df["annotator"].isin(["ann1", "ann2"])) & (sample_df["label"] == "lbl1")
@@ -143,7 +143,7 @@ def test_get_count_multiple_annotators(sample_df: DataFrame) -> None:
 
 
 def test_get_count_multiple_labels(sample_df: DataFrame) -> None:
-    df = DataAplose(sample_df).filter_df(
+    df = DetectionData(sample_df).filter_df(
         annotator="ann5",
         label=["lbl1", "lbl2", "lbl3"],
     )
@@ -160,7 +160,7 @@ def test_get_count_multiple_labels(sample_df: DataFrame) -> None:
 
 
 def test_get_count_multiple_labels_annotators(sample_df: DataFrame) -> None:
-    df = DataAplose(sample_df).filter_df(
+    df = DetectionData(sample_df).filter_df(
         annotator=["ann1", "ann2"],
         label=["lbl1", "lbl2"],
     )
@@ -184,7 +184,7 @@ def _make_effort(
     full_start: Timestamp,
     full_end: Timestamp,
     origin: Timedelta,
-) -> RecordingPeriod:
+) -> RecordingEffort:
     """Build a fake RecordingPeriod object with fine-grained on/off samples.
 
     `active_windows` are [start, end) spans marked as recording (1);
@@ -198,11 +198,11 @@ def _make_effort(
         values.to_numpy(),
         index=IntervalIndex.from_arrays(idx, idx + origin, closed="left"),
     )
-    return RecordingPeriod(counts=counts, timebin_origin=origin)
+    return RecordingEffort(counts=counts, timebin_origin=origin)
 
 
 def test_get_count_with_effort_restricts_to_active_bins(sample_df: DataFrame) -> None:
-    df = DataAplose(sample_df).filter_df(annotator="ann1", label="lbl1")
+    df = DetectionData(sample_df).filter_df(annotator="ann1", label="lbl1")
     bin = get_max_time(df)
     start = df["start_datetime"].min()
     stop = df["start_datetime"].min() + Timedelta("1min")
@@ -221,7 +221,7 @@ def test_get_count_with_effort_restricts_to_active_bins(sample_df: DataFrame) ->
 
 
 def test_get_count_with_effort_all_zero_raises(sample_df: DataFrame) -> None:
-    df = DataAplose(sample_df).filter_df(annotator="ann1", label="lbl1")
+    df = DetectionData(sample_df).filter_df(annotator="ann1", label="lbl1")
 
     start = df["start_datetime"].min()
     stop = df["start_datetime"].min() + Timedelta("1min")
@@ -239,7 +239,7 @@ def test_get_count_with_effort_all_zero_raises(sample_df: DataFrame) -> None:
 
 
 def test_get_count_with_effort_matches_full_coverage(sample_df: DataFrame) -> None:
-    df = DataAplose(sample_df).filter_df(annotator="ann1", label="lbl1")
+    df = DetectionData(sample_df).filter_df(annotator="ann1", label="lbl1")
 
     bin = get_max_time(df)
     start = df["start_datetime"].min()
@@ -266,21 +266,21 @@ def test_get_count_with_effort_matches_full_coverage(sample_df: DataFrame) -> No
 
 
 def test_get_labels_and_annotators_valid_entry(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df).filter_df(annotator="ann1", label="lbl1")
+    data = DetectionData(sample_df).filter_df(annotator="ann1", label="lbl1")
     labels, annotators = get_labels_and_annotators(data)
     assert labels == ["lbl1"]
     assert annotators == ["ann1"]
 
 
 def test_single_label_multiple_annotators(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df).filter_df(annotator=["ann1", "ann2"], label="lbl1")
+    data = DetectionData(sample_df).filter_df(annotator=["ann1", "ann2"], label="lbl1")
     labels, annotators = get_labels_and_annotators(data)
     assert sorted(labels) == ["lbl1"] * 2
     assert sorted(annotators) == ["ann1", "ann2"]
 
 
 def test_single_annotator_multiple_labels(sample_df: DataFrame) -> None:
-    data = DataAplose(sample_df).filter_df(annotator="ann1", label=["lbl1", "lbl2"])
+    data = DetectionData(sample_df).filter_df(annotator="ann1", label=["lbl1", "lbl2"])
     labels, annotators = get_labels_and_annotators(data)
     assert sorted(labels) == ["lbl1", "lbl2"]
     assert sorted(annotators) == ["ann1"] * 2

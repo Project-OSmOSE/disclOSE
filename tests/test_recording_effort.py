@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from pandas import DataFrame, IntervalIndex, Timedelta, Timestamp, read_csv, to_datetime
 
-from disclose.dataclass.data_aplose_config import DataAploseConfig
-from disclose.dataclass.recording_period import RecordingPeriod
+from disclose.dataclass.detection_config import DetectionConfig
+from disclose.dataclass.recording_effort import RecordingEffort
 
 
 def test_recording_period_with_gaps(
@@ -25,10 +25,10 @@ def test_recording_period_with_gaps(
         "filename_format": "%Y_%m_%d_%H_%M_%S_%f%z",
         "recording_file": recording_planning_csv,
     }
-    config = DataAploseConfig(**dict_test)
+    config = DetectionConfig(**dict_test)
     histo_x_bin_size = Timedelta("7D")
 
-    recording_period = RecordingPeriod.from_config(
+    recording_period = RecordingEffort.from_config(
         config=config,
         bin_size=histo_x_bin_size,
     )
@@ -95,10 +95,10 @@ def test_no_recording_file_provided(
         "filename_format": "%Y_%m_%d_%H_%M_%S",
         "recording_file": None,
     }
-    config = DataAploseConfig(**dict_test)
+    config = DetectionConfig(**dict_test)
 
     with pytest.raises(ValueError, match=r"No recording file provided."):
-        RecordingPeriod.from_config(config=config, bin_size=Timedelta("1h"))
+        RecordingEffort.from_config(config=config, bin_size=Timedelta("1h"))
 
 
 def test_no_recording_wrong_file(
@@ -110,10 +110,10 @@ def test_no_recording_wrong_file(
         "filename_format": "%Y_%m_%d_%H_%M_%S",
         "recording_file": Path("fake_file.csv"),
     }
-    config = DataAploseConfig(**dict_test)
+    config = DetectionConfig(**dict_test)
 
     with pytest.raises(FileNotFoundError, match=r"File not found"):
-        RecordingPeriod.from_config(config=config, bin_size=Timedelta("1h"))
+        RecordingEffort.from_config(config=config, bin_size=Timedelta("1h"))
 
 
 def test_from_json(tmp_path: Path):
@@ -133,7 +133,7 @@ def test_from_json(tmp_path: Path):
     ]
 
     json_file.write_text(json.dumps(data))
-    df = RecordingPeriod.from_json(json_file)
+    df = RecordingEffort.from_json(json_file)
 
     expected = DataFrame([
         {
@@ -164,7 +164,7 @@ def test_recording_period_from_csv_empty(
     data.to_csv(empty_file, index=False)
 
     with pytest.raises(ValueError, match=r"CSV is empty."):
-        RecordingPeriod.from_csv(empty_file)
+        RecordingEffort.from_csv(empty_file)
 
 
 def test_recording_period_from_csv_missing_column(
@@ -184,7 +184,7 @@ def test_recording_period_from_csv_missing_column(
     data.to_csv(missing_col_file, index=False)
 
     with pytest.raises(ValueError, match=r"Missing column provided"):
-        RecordingPeriod.from_csv(missing_col_file)
+        RecordingEffort.from_csv(missing_col_file)
 
 
 def test_recording_from_config_empty_file(
@@ -208,7 +208,7 @@ def test_recording_from_config_empty_file(
         "filename_format": "%Y_%m_%d_%H_%M_%S",
         "recording_file": empty_file,
     }
-    config = DataAploseConfig(**dict_test)
+    config = DetectionConfig(**dict_test)
 
     with pytest.raises(ValueError, match=r"CSV is empty."):
-        RecordingPeriod.from_config(config=config, bin_size=Timedelta("1h"))
+        RecordingEffort.from_config(config=config, bin_size=Timedelta("1h"))

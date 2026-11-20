@@ -2,7 +2,7 @@
 
 `DataAplose` handles, analyzes and visualizes APLOSE-formatted detection data.
 
->>> data = DataAplose.from_dict({"detection_file": Path("results.csv"), ...})
+>>> data = DetectionData.from_dict({"detection_file": Path("results.csv"), ...})
 >>> data.coordinates = (48.39, -4.49)
 >>> fig, ax = plt.subplots()
 >>> data.plot.histogram("annotator", "label", bin_size=Timedelta("1D"), ax=ax)
@@ -27,8 +27,8 @@ from pandas import (
 )
 from pandas.tseries import offsets
 
-from disclose.dataclass.data_aplose_config import DataAploseConfig
-from disclose.dataclass.recording_period import RecordingPeriod
+from disclose.dataclass.detection_config import DetectionConfig
+from disclose.dataclass.recording_effort import RecordingEffort
 from disclose.utils.core import get_count
 from disclose.utils.filtering import (
     get_annotators,
@@ -39,10 +39,10 @@ from disclose.utils.filtering import (
     load_detections,
 )
 from disclose.utils.metric import (
-    detection_perf,
     Classification,
     ConfusionMatrix,
     Scores,
+    detection_perf,
 )
 from disclose.utils.visualisation import (
     heatmap,
@@ -139,14 +139,14 @@ def empty_dataframe() -> DataFrame:
 
 
 @dataclass(eq=False)
-class DataAplose:
+class DetectionData:
     """Handle APLOSE-formatted detection data.
 
     Attributes
     ----------
     df: DataFrame
         APLOSE-formatted detections.
-    config: DataAploseConfig
+    config: DetectionConfig
         Configuration the data was loaded with.
     lat, lon: float | None
         Position of the recorder in decimal degrees.
@@ -162,7 +162,7 @@ class DataAplose:
     Examples
     --------
     >>> from disclose.utils import metric
-    >>> data = DataAplose.from_dict({"detection_file": Path("results.csv")})
+    >>> data = DetectionData.from_dict({"detection_file": Path("results.csv")})
     >>> data.coordinates = (48.39, -4.49)
     >>> data.change_tz("Europe/Paris")
     >>> perf = metrics.detection_perf(("ann1", "ann2"), ("lbl1", "lbl1"))
@@ -172,7 +172,7 @@ class DataAplose:
     """
 
     df: DataFrame = field(default_factory=empty_dataframe)
-    config: DataAploseConfig = field(default_factory=DataAploseConfig.empty)
+    config: DetectionConfig = field(default_factory=DetectionConfig.empty)
 
     lat: float | None = None
     lon: float | None = None
@@ -322,7 +322,7 @@ class DataAplose:
     @classmethod
     def from_config(
         cls,
-        config: DataAploseConfig,
+        config: DetectionConfig,
         *,
         coordinates: tuple[float, float] | None = None,
     ) -> Self:
@@ -330,7 +330,7 @@ class DataAplose:
 
         Parameters
         ----------
-        config: DataAploseConfig
+        config: DetectionConfig
             Loading and filtering configuration.
         coordinates: tuple[float, float] | None
             Optional (lat, lon) of the recorder.
@@ -368,16 +368,16 @@ class DataAplose:
         and ``merge`` is ``False``.
 
         """
-        configs = DataAploseConfig.from_dict(config)
+        configs = DetectionConfig.from_dict(config)
 
-        if isinstance(configs, DataAploseConfig):
+        if isinstance(configs, DetectionConfig):
             return cls.from_config(configs, coordinates=coordinates)
 
         datasets = [cls.from_config(conf, coordinates=coordinates) for conf in configs]
         return cls.merge(datasets) if merge else datasets
 
     @classmethod
-    def merge(cls, datasets: list[DataAplose]) -> Self:
+    def merge(cls, datasets: list[DetectionData]) -> Self:
         """Merge several instances into one.
 
         Detections are concatenated and sorted.
@@ -399,7 +399,7 @@ class DataAplose:
             .sort_values(["start_datetime", "end_datetime", "annotator", "label"])
             .reset_index(drop=True)
         )
-        obj = cls(df=df, config=DataAploseConfig.merge([d.config for d in datasets]))
+        obj = cls(df=df, config=DetectionConfig.merge([d.config for d in datasets]))
 
         coordinates = {d.coordinates for d in datasets if None not in d.coordinates}
         if len(coordinates) == 1:
@@ -563,7 +563,7 @@ class DataAplose:
 
         Returns
         -------
-        DataAplose
+        DetectionData
             An independent filtered instance preserving the original
             configuration, coordinates, and datetime bounds.
 
@@ -613,7 +613,7 @@ class DataAplose:
         timebin = Timedelta(df_filtered["end_time"].iloc[0], "s")
 
         effort = (
-            RecordingPeriod.from_config(config=self.config, bin_size=timebin)
+            RecordingEffort.from_config(config=self.config, bin_size=timebin)
             if self.config.recording_file
             else None
         )
@@ -638,7 +638,7 @@ class PlotAccessor:
         {"histogram", "polar", "heatmap", "scatter", "timeline", "agreement"},
     )
 
-    def __init__(self, data: DataAplose) -> None:
+    def __init__(self, data: DetectionData) -> None:
         """Bind the accessor to a ``DataAplose``."""
         self._data = data
 
@@ -686,11 +686,11 @@ class PlotAccessor:
         self,
         effort: bool,  # ruff: ignore[boolean-type-hint-positional-argument]
         bin_size: Timedelta | BaseOffset,
-    ) -> RecordingPeriod | None:
+    ) -> RecordingEffort | None:
         """Build the recording effort if requested."""
         if not effort:
             return None
-        return RecordingPeriod.from_config(config=self._data.config, bin_size=bin_size)
+        return RecordingEffort.from_config(config=self._data.config, bin_size=bin_size)
 
     def set_ax(
         self,
