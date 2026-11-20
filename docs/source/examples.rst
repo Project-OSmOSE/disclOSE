@@ -17,13 +17,13 @@ The examples use a small set of result files that follow **OSEkit** convention.T
 
 .. topic:: :doc:`Single barplot <example_single_barplot>`
 
-    Manipulate a DataAplose object to display regular barplots from data.
+    Manipulate a DetectionData object to display regular barplots from data.
 
 ===========
 
 .. topic:: :doc:`Multi barplot <example_multi_barplot>`
 
-    Manipulate a DataAplose object to display regular barplots from data.
+    Manipulate a DetectionData object to display regular barplots from data.
 
 .. toctree ::
     :hidden:
