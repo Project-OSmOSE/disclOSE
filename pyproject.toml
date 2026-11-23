@@ -31,7 +31,7 @@ dev = [
     "notebook>=7.6.5",
     "ipykernel>=7.4.0",
     "setuptools<84.3",
-    "ruff>=0.17.5,<0.18",
+    "ruff>=0.17.6,<0.18",
     "sphinx>=9.1.1",
     "sphinx-book-theme>=1.1.4",
     "sphinx-copybutton>=0.5.2",
