@@ -26,6 +26,14 @@ Instructions on how to use **disclOSE**.
 
 ====================
 
+:doc:`API <api>`
+----------------------------------
+
+Reference of the classes and functions of **disclOSE**.
+
+
+====================
+
 .. toctree::
    :maxdepth: 2
    :includehidden:
@@ -33,3 +41,4 @@ Instructions on how to use **disclOSE**.
    installation
    usage
    examples
+   api
