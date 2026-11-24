@@ -280,10 +280,6 @@ def polar(
 def _prepare_timeline_plot(
     df: DataFrame,
     ax: Axes,
-    *,
-    bins: DatetimeIndex = None,
-    coordinates: tuple[float, float] | None = None,
-    **kwargs: bool,
 ) -> None:
     """Plot daily detection patterns for a given annotator and label.
 
@@ -293,41 +289,14 @@ def _prepare_timeline_plot(
         data to plot
     ax : plt.Axes
         The matplotlib axis to draw on.
-    coordinates : tuple[float, float]
-        The latitude and longitude.
-    bins : DatetimeIndex
-        Pandas date range of the data to plot
-    **kwargs: Additional keyword arguments depending on the mode.
-        -show_rise_set : bool, default True
-            Whether to overlay sunrise and sunset lines.
 
     """
-    lat, lon = coordinates
-    if lat is None or lon is None:
-        msg = "``lat` and `lon` coordinates must be provided"
-        raise ValueError(msg)
-
-    begin = bins[0]
-    end = bins[-1]
-
-    show_rise_set = kwargs.get("show_rise_set", False)
-
     labels, annotators = get_labels_and_annotators(df)
 
-    ax.set_xlim(begin, end)
     ax.set_ylim(0, 24)
     ax.set_yticks(range(0, 25, 2))
-    ax.set_ylabel("Hour")
     ax.grid(color="k", linestyle="-", linewidth=0.2)
-
     set_plot_title(ax=ax, annotators=annotators, labels=labels)
-
-    if show_rise_set:
-        tz = get_timezone(df)
-        if isinstance(tz, list):
-            msg = "Several timezones not supported."
-            raise ValueError(msg)
-        add_sunrise_sunset(ax, lat, lon, tz)
 
 
 def scatter(
@@ -363,11 +332,10 @@ def scatter(
     _prepare_timeline_plot(
         df=df,
         ax=ax,
-        bins=time_range,
-        show_rise_set=show_rise_set,
-        season=season,
-        coordinates=coordinates,
     )
+
+    if coordinates:
+        lat, lon = coordinates
 
     labels, annotators = get_labels_and_annotators(df)
     for ann in set(annotators):
@@ -391,16 +359,9 @@ def scatter(
                 alpha=0.7,
             )
 
-    ax.legend(
-        loc="upper left",
-        bbox_to_anchor=(1.01, 1),
-        frameon=True,
-        framealpha=0.6,
-    )
-
     _, bin_size_dt = get_time_range_and_bin_size(list(time_range), time_range.freq)
+
     if coordinates and season:
-        lat, _ = coordinates
         add_season_period(ax, northern=lat >= 0, bin_size=bin_size_dt)
 
     if effort:
@@ -409,6 +370,15 @@ def scatter(
             observed=effort,
             legend=True,
         )
+
+    if show_rise_set:
+        tz = get_timezone(df)
+        if isinstance(tz, list):
+            msg = "Several timezones not supported."
+            raise ValueError(msg)
+        add_sunrise_sunset(ax, lat, lon, tz)
+
+    update_legend(ax)
 
 
 def heatmap(
@@ -452,6 +422,9 @@ def heatmap(
     coordinates = kwargs.get("coordinates", False)
     effort = kwargs.get("effort")
 
+    if coordinates:
+        lat, lon = coordinates
+
     begin = time_range[0]
     end = time_range[-1]
 
@@ -461,9 +434,6 @@ def heatmap(
     _prepare_timeline_plot(
         df=df,
         ax=ax,
-        bins=cell_bins,
-        show_rise_set=show_rise_set,
-        coordinates=coordinates,
     )
 
     freq = frequencies.to_offset(get_max_time(df))
@@ -494,18 +464,16 @@ def heatmap(
         origin="lower",
     )
 
-    if coordinates and season:
-        lat, _ = coordinates
-        add_season_period(ax, bin_size=bin_size_dt, northern=lat >= 0)
-
     bin_size_str = get_bin_size_str(bin_size)
     freq_str = get_bin_size_str(freq)
 
     fig = ax.get_figure()
-    cbar = fig.colorbar(im, ax=ax, pad=0.1)
-    cbar.ax.set_ylabel(f"{freq_str} detections per hour")
-    ax.set_ylabel("Hour of day")
+    fig.colorbar(im, ax=ax, pad=0.01)
+    ax.set_ylabel(f"Detections per hour of day ({freq_str})")
     ax.set_xlabel(f"Time ({bin_size_str} bin)")
+
+    if coordinates and season:
+        add_season_period(ax, bin_size=bin_size_dt, northern=lat >= 0)
 
     if effort:
         shade_no_effort(
@@ -515,6 +483,15 @@ def heatmap(
             alpha=0.9,
             facecolor=0.9,
         )
+
+    if show_rise_set:
+        tz = get_timezone(df)
+        if isinstance(tz, list):
+            msg = "Several timezones not supported."
+            raise ValueError(msg)
+        add_sunrise_sunset(ax, lat, lon, tz)
+
+    update_legend(ax)
 
     return ax
 
@@ -802,8 +779,6 @@ def shade_no_effort(
         ax.legend(
             handles,
             labels,
-            bbox_to_anchor=(1.01, 1),
-            loc="upper left",
         )
 
 
@@ -848,9 +823,22 @@ def add_sunrise_sunset(ax: Axes, lat: float, lon: float, tz: tzinfo) -> None:
 
     ax.plot(dates, sunrise, color="darkorange", label="Sunrise")
     ax.plot(dates, sunset, color="royalblue", label="Sunset")
+
+
+def update_legend(ax: Axes, bbox: tuple[float, float] = (1.1, 1)) -> None:
+    """Create a consistently positioned legend without duplicate labels."""
+    handles, labels = ax.get_legend_handles_labels()
+
+    unique = dict(zip(labels, handles, strict=True))
+
+    if not unique:
+        return
+
     ax.legend(
-        loc="center left",
+        unique.values(),
+        unique.keys(),
+        loc="upper left",
+        bbox_to_anchor=bbox,
         frameon=True,
         framealpha=0.6,
-        bbox_to_anchor=(1.01, 0.95),
     )
