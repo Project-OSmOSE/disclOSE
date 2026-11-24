@@ -5,7 +5,7 @@
 
 This section gathers **disclOSE** jupyter notebooks that complete typical tasks.
 
-The examples use a small set of result files.They can be found under ``docs/source/_static``.
+The following examples use a small set of result files.They can be found under ``docs/source/_static``.
 
 ===========
 
@@ -15,21 +15,10 @@ The examples use a small set of result files.They can be found under ``docs/sour
 
 ===========
 
-.. topic:: :doc:`Single barplot <example_HF>`
+.. topic:: :doc:`Basic plots <example_HF>`
 
-    ...
+    Basic plots and inter-annotator agreement.
 
-===========
-
-.. topic:: :doc:`Multi barplot <example_LF>`
-
-    ...
-
-===========
-
-.. topic:: :doc:`Multi barplot <example_glider>`
-
-    ...
 
 .. toctree ::
     :hidden:
