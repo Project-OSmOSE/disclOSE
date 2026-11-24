@@ -19,17 +19,6 @@ The following examples use a small set of result files.They can be found under `
 
     Basic plots and inter-annotator agreement.
 
-===========
-
-.. topic:: :doc:`From several result files <example_LF>`
-
-    Handle data from several result files.
-
-===========
-
-.. topic:: :doc:`Glider data <example_glider>`
-
-    Handle data from AUV platform as a glider.
 
 .. toctree ::
     :hidden:
