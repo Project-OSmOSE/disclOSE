@@ -198,8 +198,7 @@ def test_histo(sample_csv_result: DataFrame, recording_planning_csv: DataFrame) 
     }
     data = DetectionData.from_dict(dict_test)
     _, ax = plt.subplots()
-    bin_size = Timedelta("1h")
-    tick_freq = frequencies.to_offset("2h")
+    tick_freq = frequencies.to_offset("12h")
     ax = data.plot.set_ax(
         ax=ax,
         x_ticks_res=tick_freq,
@@ -209,7 +208,7 @@ def test_histo(sample_csv_result: DataFrame, recording_planning_csv: DataFrame) 
         ax=ax,
         annotator="ann1",
         label="lbl1",
-        bin_size=bin_size,
+        bin_size=Timedelta("12h"),
         effort=True,
     )
 
@@ -724,7 +723,7 @@ def test_scatter_plot(sample_csv_result: Path, recording_planning_csv: Path) -> 
     config = {
         "detection_file": sample_csv_result,
         "filename_format": "%Y_%m_%d_%H_%M_%S",
-        "timebin_new": Timedelta(seconds=60),
+        "timebin_new": Timedelta("1h"),
         "recording_file": recording_planning_csv,
     }
 
@@ -738,7 +737,7 @@ def test_scatter_plot(sample_csv_result: Path, recording_planning_csv: Path) -> 
         show_rise_set=True,
         coordinates=(0, 0),
         effort=True,
-        bin_size=Timedelta("1h"),
+        bin_size=Timedelta("12h"),
     )
 
 

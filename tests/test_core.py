@@ -466,7 +466,7 @@ def test_add_wd(sample_df: DataFrame) -> None:
 def test_add_season_valid() -> None:
     _, ax = plt.subplots()
     start = Timestamp("2025-01-01")
-    stop = Timestamp("2026-01-01")
+    stop = Timestamp("2025-01-02")
     freq = Timedelta("1D")
     ts = date_range(start=start, end=stop, freq=freq, tz="UTC")
     values = [date.day for date in ts]
