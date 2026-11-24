@@ -1,10 +1,8 @@
 from unittest.mock import Mock
 
-import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-import pytz
 from matplotlib.axes import Axes
 from matplotlib.colors import to_rgba
 from pandas import (
@@ -13,6 +11,7 @@ from pandas import (
     Timedelta,
     Timestamp,
     date_range,
+    concat,
 )
 from pandas.tseries import frequencies
 
@@ -310,81 +309,13 @@ def test_histo_not_enough_data(
 def test_prepare_timeline_plot_axes(
     ax: Axes,
     df_ann1_lbl1: DataFrame,
-    time_range: DatetimeIndex,
 ) -> None:
     _prepare_timeline_plot(
         df_ann1_lbl1,
         ax,
-        bins=time_range,
-        coordinates=(48.39, -4.49),
-    )
-
-    assert ax.get_xlim() == pytest.approx(
-        (mdates.date2num(time_range[0]), mdates.date2num(time_range[-1])),
     )
     assert ax.get_ylim() == (0, 24)
-    assert ax.get_ylabel() == "Hour"
     assert ax.get_title() == "annotator: ann1\nlabel: lbl1"
-
-
-def test_prepare_timeline_plot_rise_set(
-    monkeypatch: pytest.MonkeyPatch,
-    ax: Axes,
-    df_ann1_lbl1: DataFrame,
-    time_range: DatetimeIndex,
-) -> None:
-    called = []
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.add_sunrise_sunset",
-        lambda *args, **kwargs: called.append(args),
-    )
-
-    _prepare_timeline_plot(
-        df_ann1_lbl1,
-        ax,
-        bins=time_range,
-        coordinates=(48.39, -4.49),
-        show_rise_set=True,
-    )
-
-    assert len(called) == 1
-
-
-def test_prepare_timeline_plot_several_timezones(
-    monkeypatch: pytest.MonkeyPatch,
-    ax: Axes,
-    df_ann1_lbl1: DataFrame,
-    time_range: DatetimeIndex,
-) -> None:
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.get_timezone",
-        lambda df: [pytz.utc, pytz.FixedOffset(420)],
-    )
-
-    with pytest.raises(ValueError, match="Several timezones not supported."):
-        _prepare_timeline_plot(
-            df_ann1_lbl1,
-            ax,
-            bins=time_range,
-            coordinates=(48.39, -4.49),
-            show_rise_set=True,
-        )
-
-
-def test_prepare_timeline_plot_missing_coordinates(
-    monkeypatch: pytest.MonkeyPatch,
-    ax: Axes,
-    df_ann1_lbl1: DataFrame,
-    time_range: DatetimeIndex,
-) -> None:
-    with pytest.raises(ValueError, match=r"coordinates must be provided"):
-        _prepare_timeline_plot(
-            df_ann1_lbl1,
-            ax,
-            bins=time_range,
-            coordinates=(None, None),
-            show_rise_set=True,
-        )
 
 
 # %% scatter
@@ -403,6 +334,28 @@ def test_scatter_points_and_legend(
     assert ax.get_ylim() == (0, 24)
 
 
+def test_scatter_several_timezones(
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
+) -> None:
+    row = df_ann1_lbl1.loc[0]
+    row["start_datetime"] = (
+        df_ann1_lbl1["start_datetime"].iloc[0].tz_convert("Europe/Paris")
+    )
+    df_tz = concat([df_ann1_lbl1, row.to_frame().T], ignore_index=True)
+
+    with pytest.raises(ValueError, match=r"Several timezones not supported"):
+        scatter(
+            df_tz,
+            ax,
+            bin_size=frequencies.to_offset("1D"),
+            time_range=time_range,
+            coordinates=(0, 0),
+            show_rise_set=True,
+        )
+
+
 # %% heatmap
 
 
@@ -417,13 +370,36 @@ def test_heatmap_counts_all_detections(
         bin_size=frequencies.to_offset("1D"),
         time_range=time_range,
         coordinates=(0, 0),
+        show_rise_set=True,
     )
 
     mat = ax.images[0].get_array()
     assert mat.shape == (24, len(time_range) - 1)
     assert mat.sum() == len(df_ann1_lbl1)
-    assert ax.get_ylabel() == "Hour of day"
+    assert ax.get_ylabel() == "Detections per hour of day (10s)"
     assert ax.get_xlabel() == "Time (1D bin)"
+
+
+def test_heatmap_several_timezones(
+    ax: Axes,
+    df_ann1_lbl1: DataFrame,
+    time_range: DatetimeIndex,
+) -> None:
+    row = df_ann1_lbl1.loc[0]
+    row["start_datetime"] = (
+        df_ann1_lbl1["start_datetime"].iloc[0].tz_convert("Europe/Paris")
+    )
+    df_tz = concat([df_ann1_lbl1, row.to_frame().T], ignore_index=True)
+
+    with pytest.raises(ValueError, match=r"Several timezones not supported"):
+        heatmap(
+            df_tz,
+            ax,
+            bin_size=frequencies.to_offset("1D"),
+            time_range=time_range,
+            coordinates=(0, 0),
+            show_rise_set=True,
+        )
 
 
 # %% timeline
@@ -455,35 +431,7 @@ def test_timeline_custom_colors(ax: Axes, sample_df: DataFrame) -> None:
 # %% add_sunrise_sunset
 
 
-def test_add_sunrise_sunset(sample_df: DataFrame):
-    fig, ax = plt.subplots()
-
-    try:
-        _prepare_timeline_plot(
-            df=sample_df,
-            ax=ax,
-            bins=date_range(
-                start=min(sample_df["start_datetime"]),
-                end=max(sample_df["end_datetime"]),
-                freq=Timedelta("1min"),
-            ),
-            show_rise_set=True,
-            coordinates=(40, -4),
-        )
-
-        lines = ax.get_lines()
-        assert lines[-2].get_label() == "Sunrise"
-        assert lines[-2].get_color() == "darkorange"
-        assert lines[-1].get_label() == "Sunset"
-        assert lines[-1].get_color() == "royalblue"
-
-        assert ax.get_legend() is not None
-        assert [text.get_text() for text in ax.get_legend().get_texts()][-2:] == [
-            "Sunrise",
-            "Sunset",
-        ]
-    finally:
-        plt.close(fig)
+# %% polar
 
 
 def test_polar_creates_polar_axes_when_none(sample_df: DataFrame) -> None:
@@ -724,7 +672,7 @@ def test_shade_no_effort_partial_effort_legend(
         sample_df_counts,
         ax,
         Timedelta("1D"),
-        Timedelta("10s"),
+        Timedelta("10min"),
     )
     shade_no_effort(ax, observed=effort, legend=True)
     labels = [t.get_text() for t in ax.get_legend().get_texts()]
