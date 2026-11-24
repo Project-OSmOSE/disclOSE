@@ -672,7 +672,7 @@ def test_shade_no_effort_partial_effort_legend(
         sample_df_counts,
         ax,
         Timedelta("1D"),
-        Timedelta("10min"),
+        Timedelta("12h"),
     )
     shade_no_effort(ax, observed=effort, legend=True)
     labels = [t.get_text() for t in ax.get_legend().get_texts()]
