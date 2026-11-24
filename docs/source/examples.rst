@@ -15,13 +15,13 @@ The following examples use a small set of result files.They can be found under `
 
 ===========
 
-.. topic:: :doc:`Basic plots <example_HF>`
+.. topic:: :doc:`Basic plots<example_HF>`
 
     Basic plots and inter-annotator agreement.
 
 ===========
 
-.. topic:: :doc:`Overview<example_LF>`
+.. topic:: :doc:`From several files<example_LF>`
 
     Handle data from several result files.
 
