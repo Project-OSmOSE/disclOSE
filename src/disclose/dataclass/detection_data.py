@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from copy import copy as _copy
 from dataclasses import dataclass, field, replace
+from itertools import count
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 import matplotlib.dates as mdates
@@ -25,11 +26,11 @@ from pandas import (
     date_range,
     to_datetime,
 )
-from pandas.tseries import offsets
+from pandas.tseries import offsets, frequencies
 
 from disclose.dataclass.detection_config import DetectionConfig
 from disclose.dataclass.recording_effort import RecordingEffort
-from disclose.utils.core import get_count
+from disclose.utils.core import get_count, get_labels_and_annotators
 from disclose.utils.filtering import (
     get_annotators,
     get_dataset,
@@ -52,6 +53,8 @@ from disclose.utils.visualisation import (
     polar,
     scatter,
     timeline,
+    get_colors,
+    update_legend,
 )
 
 if TYPE_CHECKING:
@@ -695,8 +698,8 @@ class PlotAccessor:
     def set_ax(
         self,
         ax: Axes,
-        x_ticks_res: int | Timedelta | BaseOffset,
-        date_format: str,
+        x_ticks_res: int | Timedelta | BaseOffset | None = None,
+        date_format: str | None = None,
     ) -> Axes:
         """Configure a Matplotlib axis for a time-based plot.
 
@@ -714,6 +717,12 @@ class PlotAccessor:
         The configured Axes.
 
         """
+        if not date_format:
+            date_format = "%Y-%m-%d"
+
+        if not x_ticks_res:
+            x_ticks_res = frequencies.to_offset("1D")
+
         start = self._data.start_datetime
         ax.xaxis.set_major_locator(_get_locator_from_offset(offset=x_ticks_res))
         ax.xaxis.set_major_formatter(
@@ -890,6 +899,8 @@ class PlotAccessor:
         season: bool = False,
         effort: bool = False,
         coordinates: tuple[float, float] | None = None,
+        color: str | list[str] | None = None,
+        **kwargs,
     ) -> Axes:
         """Scatter-plot detections (hour of day vs. time).
 
@@ -909,28 +920,57 @@ class PlotAccessor:
             Whether to shade the periods without recording effort.
         coordinates: tuple[float, float] | None
             Overrides ``data.coordinates``. Required.
+        color: str | list[str] | None
+            Color(s) of the points.
 
         """
         ax = self._get_ax(ax)
         data = self._data
         coords = self._coordinates(coordinates, required=True)
-        df_filtered = data.filter_df(annotator, label)
         bin_size = bin_size or get_max_time(data.df)
 
+        labels, annotators = get_labels_and_annotators(data.filter_df(annotator, label))
+
+        if color is None:
+            color = get_colors(data.df)
+        elif isinstance(color, list):
+            if len(color) != len(labels):
+                msg = f"Expected {len(labels)} colors, got {len(color)}"
+                raise ValueError(msg)
+        else:
+            color = [color]
+
         ax.set_xlim(data.start_datetime, data.end_datetime)
-        scatter(
-            df=df_filtered,
+
+        counter = count()
+        for ann, lbl in zip(annotators, labels):
+            df_filtered = data.filter_df(ann, lbl)
+
+            if df_filtered.empty:
+                continue
+
+            scatter(
+                df=df_filtered,
+                ax=ax,
+                time_range=date_range(
+                    start=data.start_datetime,
+                    end=data.end_datetime,
+                    freq=bin_size,
+                ),
+                show_rise_set=show_rise_set,
+                season=season,
+                coordinates=coords,
+                effort=self._effort(effort, bin_size),
+                color=color[next(counter)],
+                **kwargs,
+            )
+
+        self.set_ax(
             ax=ax,
-            time_range=date_range(
-                start=data.start_datetime,
-                end=data.end_datetime,
-                freq=bin_size,
-            ),
-            show_rise_set=show_rise_set,
-            season=season,
-            coordinates=coords,
-            effort=self._effort(effort, bin_size),
+            x_ticks_res=bin_size,
         )
+        update_legend(ax)
+
         return self._tight_layout(ax)
 
     def timeline(  # ruff: ignore[too-many-arguments]

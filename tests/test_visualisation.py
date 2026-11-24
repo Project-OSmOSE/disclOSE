@@ -29,6 +29,7 @@ from disclose.utils.visualisation import (
     set_y_axis_to_percentage,
     shade_no_effort,
     timeline,
+    update_legend,
 )
 
 
@@ -327,6 +328,7 @@ def test_scatter_points_and_legend(
     time_range: DatetimeIndex,
 ) -> None:
     scatter(df_ann1_lbl1, ax, time_range, coordinates=(0, 0))
+    update_legend(ax)
 
     assert len(ax.collections) == 1
     assert len(ax.collections[0].get_offsets()) == len(df_ann1_lbl1)
@@ -349,7 +351,6 @@ def test_scatter_several_timezones(
         scatter(
             df_tz,
             ax,
-            bin_size=frequencies.to_offset("1D"),
             time_range=time_range,
             coordinates=(0, 0),
             show_rise_set=True,
@@ -527,11 +528,13 @@ def test_histo_season_southern_hemisphere(
 
 
 def test_scatter_skips_empty_cross_product_groups(ax: Axes, sample_df: DataFrame):
-    df_filtered = sample_df[
-        (sample_df["annotator"].isin(["ann1", "ann2"])) & (sample_df["label"] == "lbl1")
-    ]
     times = date_range("2025-01-01", periods=5, freq="D", tz="UTC")
-    scatter(df_filtered, ax, times, coordinates=(48.0, -4.0))
+    for ann, lbl in zip(["ann1", "ann2"], 2 * ["lbl1"]):
+        df_filtered = sample_df[
+            (sample_df["annotator"] == ann) & (sample_df["label"] == lbl)
+        ]
+        scatter(df_filtered, ax, times)
+    update_legend(ax)
     assert len(ax.collections) == 2
     assert sorted(c.get_label() for c in ax.collections) == [
         "ann1 - lbl1",
@@ -563,7 +566,6 @@ def test_scatter_coordinates_and_season(
     season.assert_called_once_with(
         ax,
         northern=False,
-        bin_size=Timedelta("1D"),
     )
 
 

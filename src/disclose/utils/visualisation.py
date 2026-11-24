@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from itertools import cycle
+from itertools import cycle, islice
 from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
@@ -322,12 +322,22 @@ def scatter(
             Whether to overlay sunrise and sunset lines.
         -season: bool
             Whether to show the season.
+        - color: str | list[str]
+            Color or list of colors for the scatter plot.
+            If not provided, default colors will be used.
+        - marker: str | list[str]
+            Marker or list of markers for the scatter plot.
+            If not provided, default value is "x".
 
     """
-    show_rise_set = kwargs.get("show_rise_set", False)
-    season = kwargs.get("season", False)
-    coordinates = kwargs.get("coordinates", False)
-    effort = kwargs.get("effort", False)
+    show_rise_set = kwargs.pop("show_rise_set", False)
+    season = kwargs.pop("season", False)
+    coordinates = kwargs.pop("coordinates", False)
+    effort = kwargs.pop("effort", False)
+    color = kwargs.pop("color", None)
+    kwargs.setdefault("marker", "x")
+
+    label, annotator = get_labels_and_annotators(df)
 
     _prepare_timeline_plot(
         df=df,
@@ -337,32 +347,25 @@ def scatter(
     if coordinates:
         lat, lon = coordinates
 
-    labels, annotators = get_labels_and_annotators(df)
-    for ann in set(annotators):
-        for lbl in set(labels):
-            group = df[(df["annotator"] == ann) & (df["label"] == lbl)]
+    detect_time_dec = [
+        ts.hour + ts.minute / 60 + ts.second / 3600 for ts in df["start_datetime"]
+    ]
 
-            if group.empty:
-                continue
-
-            detect_time_dec = [
-                ts.hour + ts.minute / 60 + ts.second / 3600
-                for ts in group["start_datetime"]
-            ]
-
-            ax.scatter(
-                group["start_datetime"],
-                detect_time_dec,
-                label=f"{ann} - {lbl}",
-                marker="x",
-                linewidths=1,
-                alpha=0.7,
-            )
+    ax.scatter(
+        df["start_datetime"],
+        detect_time_dec,
+        label=f"{annotator[0]} - {label[0]}",
+        color=color,
+        **kwargs,
+    )
 
     _, bin_size_dt = get_time_range_and_bin_size(list(time_range), time_range.freq)
 
     if coordinates and season:
-        add_season_period(ax, northern=lat >= 0, bin_size=bin_size_dt)
+        add_season_period(
+            ax,
+            northern=lat >= 0,
+        )
 
     if effort:
         shade_no_effort(
@@ -377,8 +380,6 @@ def scatter(
             msg = "Several timezones not supported."
             raise ValueError(msg)
         add_sunrise_sunset(ax, lat, lon, tz)
-
-    update_legend(ax)
 
 
 def heatmap(
@@ -647,6 +648,9 @@ def timeline(
 
 def get_colors(df: DataFrame) -> list[str]:
     """Return default plot colors."""
+    if {"annotator", "label"}.issubset(df.columns):
+        n_pairs = len(df[["annotator", "label"]].drop_duplicates())
+        return list(islice(cycle(default_colors), n_pairs))
     return [c for _, c in zip(range(len(df.columns)), cycle(default_colors))]
 
 
@@ -834,9 +838,11 @@ def update_legend(ax: Axes, bbox: tuple[float, float] = (1.1, 1)) -> None:
     if not unique:
         return
 
+    sorted_items = sorted(unique.items(), key=lambda item: item[0].lower())
+
     ax.legend(
-        unique.values(),
-        unique.keys(),
+        [handle for _, handle in sorted_items],
+        [label for label, _ in sorted_items],
         loc="upper left",
         bbox_to_anchor=bbox,
         frameon=True,
