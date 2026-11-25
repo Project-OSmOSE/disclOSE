@@ -1,6 +1,5 @@
 """FPOD/ CPOD processing functions tests."""
 
-import secrets
 from datetime import tzinfo
 from pathlib import Path
 from types import SimpleNamespace
@@ -402,15 +401,11 @@ def sample_fb() -> DataFrame:
     })
 
 
-rng = secrets.SystemRandom()
-comp = rng.randrange(1, 5)
-
-
 def test_fit_gmm_output(sample_fb: DataFrame) -> None:
     """Test that basic structure and required columns are present."""
     clustering, ici_log, _ = fit_gmm(
         df=sample_fb,
-        comp=comp,
+        comp=3,
     )
 
     expected_columns = [
@@ -424,7 +419,7 @@ def test_fit_gmm_output(sample_fb: DataFrame) -> None:
     assert list(clustering.columns) == expected_columns
     assert clustering["Datetime"].iloc[0] != sample_fb["Datetime"].iloc[0]
     assert set(clustering["dataset"]) == {"deploy1", "deploy2", "deploy3"}
-    assert len(clustering["cluster"].unique()) == comp
+    assert len(clustering["cluster"].unique()) == 3
     assert len(clustering) == len(ici_log)
 
 
@@ -520,14 +515,11 @@ def sample_tl_df() -> DataFrame:
     })
 
 
-threshold = rng.randrange(1, 100)
-
-
 def test_timelost_process(sample_tl_df: DataFrame, timezone: tzinfo) -> None:
     """Test that basic structure and required columns are present."""
     result = process_timelost(
         df=sample_tl_df,
-        threshold=threshold,
+        threshold=50,
     )
 
     expected_columns = [
@@ -756,3 +748,44 @@ def test_percent_barplot_empty() -> None:
         assert not ax.patches
     finally:
         plt.close(fig)
+
+
+def test_percent_barplot_missing_std(caplog: pytest.LogCaptureFixture) -> None:
+    df = DataFrame({"Month": ["Jan"], "Site": ["A"], "FBR_mean": [10.0]})
+
+    ax = percent_barplot(
+        df,
+        "Month",
+        "FBR",
+        show_std=True,
+        legend=False,
+        shade_missing=False,
+        dynamic_ylim=False,
+    )
+
+    assert ax.get_title() == "FBR per Month"
+    assert "show_std=True but column 'FBR_std' not found in df." in caplog.text
+    plt.close(ax.figure)
+
+
+def test_percent_barplot_all_nan(caplog: pytest.LogCaptureFixture) -> None:
+    df = DataFrame({"Month": ["Jan"], "Site": ["A"], "FBR_mean": [float("nan")]})
+
+    assert percent_barplot(df, "Month", "FBR") is None
+    assert "has no plottable data" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("ext", "message"),
+    [
+        ("tsv", "Invalid file extension"),
+        ("csv", r"No \.csv files found"),
+    ],
+)
+def test_load_pod_folder_rejects_invalid_or_empty_input(
+    tmp_path: Path,
+    ext: str,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        load_pod_folder(tmp_path, ext)

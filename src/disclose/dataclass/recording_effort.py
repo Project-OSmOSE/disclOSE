@@ -1,6 +1,6 @@
-"""`recording_period` module provides `RecordingEffort` dataclass.
+"""Recording-effort data and constructors.
 
-RecordingEffort class returns a Timestamp list corresponding to recording periods.
+``RecordingEffort`` stores recording coverage aggregated into time bins.
 """
 
 from __future__ import annotations
@@ -33,7 +33,15 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RecordingEffort:
-    """Represents recording effort over time, aggregated into bins."""
+    """Recording coverage aggregated into bins.
+
+    Attributes
+    ----------
+    counts : Series
+        Recording-effort counts indexed by left-closed time intervals.
+    timebin_origin : Timedelta
+        Resolution of the underlying recording-coverage timeline.
+    """
 
     counts: Series
     timebin_origin: Timedelta
@@ -45,7 +53,7 @@ class RecordingEffort:
         *,
         bin_size: Timedelta | BaseOffset,
     ) -> RecordingEffort:
-        """Vectorised creation of recording coverage from CSV with start/end datetimes.
+        """Build binned recording coverage from a configuration's recording file.
 
         This method reads a CSV with columns:
         - "start_recording"
@@ -53,16 +61,17 @@ class RecordingEffort:
         - "start_deployment"
         - "end_deployment"
 
-        It computes the **effective recording interval** as the intersection between
-        recording and deployment periods, builds a fine-grained timeline at
-        `timebin_origin` resolution, and aggregates effort into `bin_size` bins.
+        It intersects recording and deployment periods, builds a fine-grained
+        timeline at the configuration's ``timebin_origin`` resolution, and sums
+        active intervals into ``bin_size`` bins.
 
         Parameters
         ----------
         config
-            DataAploseConfig object.
+            ``DetectionConfig`` with a ``recording_file`` and ``timebin_origin``.
         bin_size : Timedelta or BaseOffset
-            Size of the aggregation bin (e.g. Timedelta("1H") or "1D").
+            Width of the aggregation bins (for example, ``Timedelta("1h")`` or
+            a daily offset).
 
         Returns
         -------
@@ -140,7 +149,11 @@ class RecordingEffort:
         cls,
         csv_file: Path,
     ) -> DataFrame:
-        """Load recording coverage from CSV."""
+        """Read recording/deployment intervals from CSV and parse their dates.
+
+        The input must contain ``start_recording``, ``end_recording``,
+        ``start_deployment``, and ``end_deployment`` columns.
+        """
         delim = find_delimiter(csv_file)
         df = read_csv(
             csv_file,
@@ -168,7 +181,11 @@ class RecordingEffort:
         cls,
         json_file: Path,
     ) -> DataFrame:
-        """Load recording coverage from JSON."""
+        """Extract recording/deployment interval fields from metadata JSON.
+
+        The JSON records are expected to contain deployment and recovery dates
+        and at least one channel configuration with recording start/end dates.
+        """
         with json_file.open() as f:
             data = json.load(f)
 

@@ -2,6 +2,11 @@ import io
 import os
 from pathlib import Path
 
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("MPLBACKEND", "Agg")
+
 import numpy as np
 import pytest
 import soundfile as sf

@@ -48,18 +48,20 @@ def get_position_from_timestamp(
     traj: Trajectory,
     time_vector: list[Timestamp],
 ) -> (list[float], list[float], list[float]):
-    """Compute location for at a given datetime for a given trajectory.
+    """Interpolate trajectory positions at timestamps within the track range.
 
     Parameters
     ----------
     traj: Trajectory
-        Approximate trajectory data using polynomial fitting
-    time_vector:  list
-        Timestamps to associate a location to
+        Trajectory with linear latitude and longitude interpolators.
+    time_vector: list[Timestamp]
+        Timestamps to associate with positions.
 
     Returns
     -------
-    (latitude, longitude, timestamp)
+    tuple[list[float], list[float], list[float]]
+        Latitudes, longitudes, and corresponding Unix timestamps. Inputs outside
+        the trajectory's timestamp range are omitted from all three lists.
 
     """
     time_vector_unix = [ts.timestamp() for ts in time_vector]
@@ -161,13 +163,11 @@ def load_glider_nav(directory: Path) -> DataFrame:
     -------
     DataFrame
         Combined navigation data from all matching glider output files.
-        The DataFrame includes:
-        - Columns from the original CSV files;
-        - A 'yo' column representing the file number extracted from the filename;
-        - A 'file' column indicating the source file for each row;
-        - A 'Lat DD' column for latitude in decimal degrees;
-        - A 'Lon DD' column for longitude in decimal degrees;
-        - A 'Depth' column with depth values adjusted to be positive.
+        The original navigation columns are retained (with ``Lat`` and ``Lon``
+        converted to decimal degrees and ``Depth`` made positive), along with
+        ``yo`` and ``file`` source columns. ``NavState`` values are replaced by
+        their text descriptions, ``Timestamp`` is localized to UTC, and rows
+        with a zero latitude and longitude are removed.
 
     """
     if not directory.exists():
@@ -238,11 +238,15 @@ def plot_nav_state(df: DataFrame, npz: NpzFile) -> None:
 
     Parameters
     ----------
-    df: pd.DataFrame
-        Glider navigation data
+    df: DataFrame
+        Glider navigation data with ``Timestamp`` and ``NavState`` columns.
 
-    npz: NpzFile,
-        Npz file containing the LTAS matrix, its associated frequency and time vectors
+    npz: NpzFile
+        NPZ data containing ``LTAS``, ``Freq``, and ``time`` arrays.
+
+    Notes
+    -----
+    Creates a figure with a spectrogram, colorbar, and navigation-state axis.
 
     """
     f = npz["Freq"]
@@ -285,7 +289,7 @@ def compute_acoustic_diversity(
     nav: DataFrame,
     time_vector: list[Timestamp],
 ) -> DataFrame:
-    """Compute the number of different labels at given positions and timestamps.
+    """Count distinct labels near each timestamp and attach interpolated positions.
 
     Parameters
     ----------
@@ -294,12 +298,16 @@ def compute_acoustic_diversity(
     nav: DataFrame
         Navigation data comprising positions and associated timestamps
     time_vector: list[Timestamp]
-        List of timestamps used to check for labels from df.
-        For APLOSE user, this can be constructed from task status files.
+        Timestamps at which to count detections. Timestamps outside the
+        navigation track are omitted. For APLOSE users, these can be constructed
+        from task status files.
 
     Returns
     -------
-    DataFrame comprised of timestamps, associated position, and acoustic diversity
+    DataFrame
+        Columns ``Timestamp``, ``Latitude``, ``Longitude``, and
+        ``Acoustic Diversity``. Each diversity value counts distinct
+        label/start-time pairs within the following second.
 
     """
     # track_data: glider positions at every timestamp
@@ -308,12 +316,17 @@ def compute_acoustic_diversity(
     # compute trajectory object from glider navigation data
     trajectory = set_trajectory(nav=track_data)
 
-    # compute localisation of each detection
+    # compute localization of each detection
+    time_vector = [
+        ts
+        for ts in time_vector
+        if trajectory.timestamps.min() <= ts.timestamp() <= trajectory.timestamps.max()
+    ]
     df_acoustic_diversity = DataFrame(
         columns=["Timestamp", "Latitude", "Longitude", "Acoustic Diversity"],
     )
 
-    lat_time_vector, lon_time_vector, ts_time_vector = get_position_from_timestamp(
+    lat_time_vector, lon_time_vector, _ = get_position_from_timestamp(
         traj=trajectory,
         time_vector=time_vector,
     )
@@ -325,7 +338,7 @@ def compute_acoustic_diversity(
     time_det_unix = [ts.timestamp() for ts in det["start_datetime"]]
 
     acoustic_diversity = np.zeros(len(time_vector), dtype=int)
-    for i, ts in enumerate(time_vector[: -(len(time_vector) - len(ts_time_vector))]):
+    for i, ts in enumerate(time_vector):
         for ts_det in time_det_unix:
             if (
                 ts.timestamp() <= ts_det <= ts.timestamp() + 1
@@ -361,8 +374,8 @@ def export_gpx(nav: DataFrame, path: Path) -> None:
     ----------
     nav : DataFrame
         Navigation data with required columns: ["Lat", "Lon", "Depth", "Timestamp"].
-    output_dir : Path
-        Output path of the export GPX file.
+    path : Path
+        Output path of the GPX file.
 
     """
     gpx = gpxpy.gpx.GPX()

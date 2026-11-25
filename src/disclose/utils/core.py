@@ -54,7 +54,9 @@ def get_season(ts: Timestamp, *, northern: bool = True) -> tuple[str, int]:
 
     Returns
     -------
-    The season and year of ts
+    tuple[str, int]
+        Season name and the year in which that season begins. January and
+        February are assigned to the previous year's winter (or austral summer).
 
     """
     if northern:
@@ -84,7 +86,7 @@ def get_sun_times(
     lat: float,
     lon: float,
 ) -> tuple[list[float], list[float]]:
-    """Fetch sunrise and sunset hours for dates between start and stop.
+    """Return local sunrise and sunset times for each date from start through stop.
 
     Parameters
     ----------
@@ -104,6 +106,11 @@ def get_sun_times(
 
     hour_sunset: list[float]
         Sunset decimal hours for each day between start and stop
+
+    Raises
+    ------
+    ValueError
+        If either timestamp is timezone-naive.
 
     """
     if start.tz is None or stop.tz is None:
@@ -168,9 +175,8 @@ def add_season_period(
     bar_height: int = 10,
     *,
     northern: bool = True,
-    **kwargs: Any,
 ) -> None:
-    """Add a bar at the top of the plot to seasons.
+    """Add a color-coded meteorological season bar above a time-series plot.
 
     Parameters
     ----------
@@ -186,11 +192,16 @@ def add_season_period(
         msg = "Axes have no data"
         raise ValueError(msg)
 
-    bins = date_range(
-        start=Timestamp(ax.get_xlim()[0], unit="D").round("1ms"),
-        end=Timestamp(ax.get_xlim()[1], unit="D").round("1ms"),
-        periods=2000,
+    start = Timestamp(ax.get_xlim()[0], unit="D").round("1ms")
+    end = Timestamp(ax.get_xlim()[1], unit="D").round("1ms")
+    month_starts = date_range(
+        start=start.normalize().replace(day=1),
+        end=end,
+        freq="MS",
     )
+    bins = [start]
+    bins.extend(month for month in month_starts if start < month < end)
+    bins.append(end)
 
     season_colors = {
         "winter": "#84eceb",
@@ -199,22 +210,30 @@ def add_season_period(
         "autumn": "#f9c1a5",
     }
 
-    bin_centers = [
-        (bins[i].timestamp() + bins[i + 1].timestamp()) / 2
-        for i in range(len(bins) - 1)
-    ]
-    bin_centers = [Timestamp(center, unit="s") for center in bin_centers]
-
-    bin_seasons = [get_season(bc, northern=northern)[0] for bc in bin_centers]
     bar_height = set_bar_height(ax, bar_height)
     bar_bottom = ax.get_ylim()[1] + (0.2 * bar_height)
 
-    for i, season in enumerate(bin_seasons):
+    seasons = [
+        get_season(start + (end - start) / 2, northern=northern)[0]
+        for start, end in zip(bins[:-1], bins[1:], strict=True)
+    ]
+    season_intervals = []
+    interval_start = bins[0]
+    current_season = seasons[0]
+    for index, season in enumerate(seasons[1:], start=1):
+        if season != current_season:
+            season_intervals.append((interval_start, bins[index], current_season))
+            interval_start = bins[index]
+            current_season = season
+    season_intervals.append((interval_start, bins[-1], current_season))
+
+    for start, end, season in season_intervals:
+        center = start + (end - start) / 2
         ax.bar(
-            bin_centers[i],
+            center,
             height=bar_height,
             bottom=bar_bottom,
-            width=(bins[i + 1] - bins[i]),
+            width=(end - start),
             color=season_colors[season],
             align="center",
             zorder=2,
@@ -254,7 +273,7 @@ def add_recording_period(
     ax: plt.Axes,
     bar_height: int = 10,
 ) -> None:
-    """Add a bar at the bottom on plot to show recording periods.
+    """Add a bar below a time-series plot showing deployment periods.
 
     Parameters
     ----------
@@ -295,7 +314,7 @@ def get_count(
     time: DatetimeIndex | None = None,
     effort: Any | None = None,
 ) -> DataFrame:
-    """Count observations per label and annotator.
+    """Count observations per label/annotator pair in time bins.
 
     This function groups a DataFrame of events into uniform time bins and counts the
     number of events for each (label, annotator) pair in each bin.
@@ -307,15 +326,21 @@ def get_count(
     bin_size : Timedelta | offsets
         Width or frequency of bins.
     time: DatetimeIndex
-        DatetimeIndex from a specified beginning to end
+        Optional bin-edge timestamps specifying the time range; ignored when
+        ``effort`` is provided.
     effort: Any | None
-        Recording periods reflecting the effort of observation.
+        Optional ``RecordingEffort`` used to restrict counts to active bins.
 
     Returns
     -------
     DataFrame
         A DataFrame indexed by the start of each bin (datetime), with columns named
         "<label>-<annotator>", containing the count of observations in that bin.
+
+    Raises
+    ------
+    ValueError
+        If ``df`` is empty or the supplied recording effort contains no active bins.
 
     """
     if df.empty:
@@ -382,7 +407,7 @@ def get_labels_and_annotators(df: DataFrame) -> tuple[list, list]:
 
 
 def localize_timestamps(timestamps: list[Timestamp], tz: tzinfo) -> list[Timestamp]:
-    """Localize timestamps if necessary."""
+    """Localize naive timestamps to ``tz`` and leave aware timestamps unchanged."""
     localized = []
     for ts in timestamps:
         if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
@@ -396,7 +421,11 @@ def get_time_range_and_bin_size(
     timestamp_list: list[Timestamp],
     bin_size: Timedelta | BaseOffset,
 ) -> tuple[DatetimeIndex, Timedelta]:
-    """Return time vector given a bin size."""
+    """Build inclusive bin edges spanning the timestamps and resolve bin width.
+
+    For calendar offsets, the returned ``Timedelta`` is the duration of the
+    first generated interval.
+    """
     if not isinstance(timestamp_list, list) or not all(
         isinstance(ts, Timestamp) for ts in timestamp_list
     ):
@@ -422,7 +451,11 @@ def round_begin_end_timestamps(
     timestamp_list: list[Timestamp],
     bin_size: Timedelta | BaseOffset,
 ) -> tuple[Any, Any, Any]:
-    """Return time vector given a bin size."""
+    """Round the timestamp range outward to bin boundaries.
+
+    Returns the start boundary, exclusive end boundary, and resolved bin width.
+    Calendar offsets are handled using their rollback/rollforward boundaries.
+    """
     if not isinstance(timestamp_list, list) or not all(
         isinstance(ts, Timestamp) for ts in timestamp_list
     ):
@@ -458,7 +491,7 @@ def round_begin_end_timestamps(
 
 
 def timedelta_to_str(td: Timedelta) -> str:
-    """From a Timedelta to the corresponding string."""
+    """Format a whole-second ``Timedelta`` using day, hour, minute, or second units."""
     seconds = int(td.total_seconds())
 
     if seconds % 86400 == 0:

@@ -153,18 +153,22 @@ Recording effort
 
 A ``recording_file`` is a CSV with the columns
 ``start_recording``, ``end_recording``, ``start_deployment`` and ``end_deployment``.
-It describes when the recorder was actually recording, and is used to normalise the histograms
-and to shade the periods without observation effort on the plots (``effort=True``).
+It describes when the recorder was actually recording and can be used to shade periods
+without observation effort through ``data.plot.feature(ax, effort=True)``.
 See :class:`~disclose.dataclass.recording_effort.RecordingEffort`.
 
 .. code-block:: python
+
+    import matplotlib.pyplot as plt
 
     data = DetectionData.from_dict({
         "detection_file": Path("ELAN_results.csv"),
         "recording_file": Path("ELAN_recording_periods.csv"),
     })
 
-    data.plot.histogram("annotator1", "Buzz", Timedelta("1D"), effort=True)
+    fig, ax = plt.subplots()
+    data.plot.histogram("annotator1", "Buzz", Timedelta("1D"), ax=ax)
+    data.plot.feature(ax, effort=True, bin_size=Timedelta("1D"))
 
 Plotting
 --------
@@ -179,13 +183,13 @@ Each method accepts an optional keyword-only ``ax``; a new one is created when i
    * - Method
      - Plot
    * - ``histogram``
-     - Detections per time bin, optionally with the season bar and effort normalisation.
+     - Detections per time bin.
    * - ``polar``
      - Mean proportion of detected bins per hour of the day.
    * - ``heatmap``
-     - Hour of day against date (``bin_size`` of at least 24 h). Needs coordinates.
+     - Hour of day against date (``bin_size`` of at least 24 h).
    * - ``scatter``
-     - Detections by hour of day against date. Needs coordinates.
+     - Detections by hour of day against date.
    * - ``timeline``
      - One row per label.
    * - ``agreement``
@@ -203,10 +207,15 @@ Each method accepts an optional keyword-only ``ax``; a new one is created when i
         ax=ax,
     )
 
-    data.plot("polar", "annotator1", "Buzz", show_rise_set=True)  # same as data.plot.polar(...)
+    polar_ax, _ = data.plot.polar("annotator1", "Buzz")
+    data.plot.feature(polar_ax, rise_set=True)
 
-Plots that show sunrise/sunset or the seasons need the coordinates:
-set ``data.coordinates`` or pass ``coordinates=(lat, lon)`` to the plot.
+    # Format and overlay a time-based plot independently from its data
+    data.plot.set_ax(ax, x_ticks_res=Timedelta("12h"), date_format="%Y-%m-%d")
+    data.plot.feature(ax, season=True, rise_set=True, effort=True)
+
+Plots that show sunrise/sunset or the seasons need coordinates:
+set ``data.coordinates = (lat, lon)`` before calling ``data.plot.feature``.
 
 Metrics
 -------

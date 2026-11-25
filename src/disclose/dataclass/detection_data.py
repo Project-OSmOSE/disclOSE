@@ -1,8 +1,12 @@
-"""`data_aplose` module provides the `DataAplose` class.
+"""Data containers and plotting accessors for APLOSE detection data.
 
-`DataAplose` handles, analyzes and visualizes APLOSE-formatted detection data.
+``DetectionData`` handles, analyzes, and visualizes APLOSE-formatted detections.
 
->>> data = DetectionData.from_dict({"detection_file": Path("results.csv"), ...})
+>>> from pathlib import Path
+>>> import matplotlib.pyplot as plt
+>>> from pandas import Timedelta
+>>> from disclose.dataclass.detection_data import DetectionData
+>>> data = DetectionData.from_dict({"detection_file": Path("results.csv")})
 >>> data.coordinates = (48.39, -4.49)
 >>> fig, ax = plt.subplots()
 >>> data.plot.histogram("annotator", "label", bin_size=Timedelta("1D"), ax=ax)
@@ -29,7 +33,12 @@ from pandas.tseries import offsets
 
 from disclose.dataclass.detection_config import DetectionConfig
 from disclose.dataclass.recording_effort import RecordingEffort
-from disclose.utils.core import get_count
+from disclose.utils.core import (
+    add_season_period,
+    get_count,
+    get_labels_and_annotators,
+    get_sun_times,
+)
 from disclose.utils.filtering import (
     get_annotators,
     get_dataset,
@@ -45,13 +54,18 @@ from disclose.utils.metric import (
     detection_perf,
 )
 from disclose.utils.visualisation import (
+    add_sunrise_sunset,
+    arc,
     heatmap,
     histo,
     overview,
     plot_annotator_agreement,
     polar,
     scatter,
+    shade_no_effort,
     timeline,
+    update_legend,
+    set_plot_title,
 )
 
 if TYPE_CHECKING:
@@ -161,13 +175,16 @@ class DetectionData:
 
     Examples
     --------
-    >>> from disclose.utils import metric
+    >>> from pathlib import Path
+    >>> import matplotlib.pyplot as plt
+    >>> from pandas import Timedelta
     >>> data = DetectionData.from_dict({"detection_file": Path("results.csv")})
     >>> data.coordinates = (48.39, -4.49)
     >>> data.change_tz("Europe/Paris")
-    >>> perf = metrics.detection_perf(("ann1", "ann2"), ("lbl1", "lbl1"))
+    >>> perf = data.detection_perf(("ann1", "ann2"), ("lbl1", "lbl1"))
     >>> _, ax = plt.subplots()
-    >>> data.plot.histogram("ann1", "lbl1", Timedelta("1D"), ax=ax, season=True)
+    >>> data.plot.histogram("ann1", "lbl1", Timedelta("1D"), ax=ax)
+    >>> data.plot.feature(ax, season=True)
 
     """
 
@@ -188,7 +205,7 @@ class DetectionData:
             raise ValueError(msg)
 
     def __str__(self) -> str:
-        """Return string representation of DataAplose object."""
+        """Return a summary of the data bounds, annotators, labels, and datasets."""
         return (
             f"start_datetime: {self.start_datetime}\n"
             f"end_datetime: {self.end_datetime}\n"
@@ -198,7 +215,7 @@ class DetectionData:
         )
 
     def __repr__(self) -> str:
-        """Return string representation of DataAplose object."""
+        """Return the same summary as :meth:`__str__`."""
         return self.__str__()
 
     # %% properties
@@ -364,8 +381,9 @@ class DetectionData:
 
         Returns
         -------
-        A ``DataAplose``, or a list of them if ``config`` is a list
-        and ``merge`` is ``False``.
+        DetectionData | list[DetectionData]
+            A single instance, or a list when ``config`` is a list and
+            ``merge`` is ``False``.
 
         """
         configs = DetectionConfig.from_dict(config)
@@ -552,7 +570,7 @@ class DetectionData:
         annotator: str | list[str],
         label: str | list[str],
     ) -> Self:
-        """Return a new DataAplose containing only selected detections.
+        """Return a new ``DetectionData`` containing only selected detections.
 
         Parameters
         ----------
@@ -575,7 +593,11 @@ class DetectionData:
     # %% analysis
 
     def overview(self, annotator: str | list[str]) -> DataFrame:
-        """Plot an overview of the detections of the given annotator(s)."""
+        """Return a table of detection counts by label and annotator.
+
+        If ``annotator`` is provided, the table is restricted to the selected
+        annotator or annotators.
+        """
         return overview(df=self.df, annotator=annotator)
 
     def detection_perf(
@@ -607,7 +629,8 @@ class DetectionData:
         """
         df_filtered = self.filter_df(annotator, label)
 
-        if df_filtered["end_time"].nunique() > 1:
+        end_times = df_filtered["end_time"].dropna()
+        if not end_times.empty and end_times.min() != end_times.max():
             msg = "Multiple time bins detected in DataFrame."
             raise ValueError(msg)
         timebin = Timedelta(df_filtered["end_time"].iloc[0], "s")
@@ -627,9 +650,10 @@ class DetectionData:
 
 
 class PlotAccessor:
-    """Plotting namespace of a `DataAplose`, available as ``data.plot``.
+    """Plotting namespace of a ``DetectionData``, available as ``data.plot``.
 
     Plot methods accept an optional keyword-only ``ax`` and create one when absent.
+    Use `set_ax` to format the time axis and `feature` to add overlays.
     The accessor is callable, like in pandas: ``data.plot("polar", ...)``
     is the same as ``data.plot.polar(...)``.
     """
@@ -639,7 +663,7 @@ class PlotAccessor:
     )
 
     def __init__(self, data: DetectionData) -> None:
-        """Bind the accessor to a ``DataAplose``."""
+        """Bind the accessor to a ``DetectionData`` instance."""
         self._data = data
 
     def __call__(self, kind: str, *args: Any, **kwargs: Any) -> Any:  # ruff: ignore[any-type]
@@ -660,7 +684,7 @@ class PlotAccessor:
         return ax
 
     @staticmethod
-    def _tight_layout(ax: Axes | None) -> Axes | None:
+    def _tight_layout(ax: Axes | None) -> Axes:
         """Adjust the figure layout after plotting, preserving the Axes."""
         if ax is not None:
             ax.figure.tight_layout()
@@ -676,27 +700,17 @@ class PlotAccessor:
         coordinates = override if override is not None else self._data.coordinates
         if required and None in coordinates:
             msg = (
-                "Coordinates are required for this plot: set `data.coordinates = "
+                "Coordinates are required for this feature: set `data.coordinates = "
                 "(lat, lon)` or pass `coordinates=(lat, lon)`."
             )
             raise ValueError(msg)
         return coordinates
 
-    def _effort(
-        self,
-        effort: bool,  # ruff: ignore[boolean-type-hint-positional-argument]
-        bin_size: Timedelta | BaseOffset,
-    ) -> RecordingEffort | None:
-        """Build the recording effort if requested."""
-        if not effort:
-            return None
-        return RecordingEffort.from_config(config=self._data.config, bin_size=bin_size)
-
     def set_ax(
         self,
         ax: Axes,
-        x_ticks_res: int | Timedelta | BaseOffset,
-        date_format: str,
+        x_ticks_res: Timedelta | BaseOffset | None = None,
+        date_format: str | None = "%Y-%m-%d",
     ) -> Axes:
         """Configure a Matplotlib axis for a time-based plot.
 
@@ -704,8 +718,9 @@ class PlotAccessor:
         ----------
         ax: Axes
             The Axes object to configure.
-        x_ticks_res: int | Timedelta | BaseOffset
-            Resolution of the x-axis major ticks (an ``int`` is in seconds).
+        x_ticks_res: int | Timedelta | BaseOffset | None
+            Optional resolution of the x-axis major ticks. Integers are treated
+            as seconds; ``None`` leaves the locator unchanged.
         date_format: str
             Date format of the x-axis tick labels (e.g. ``"%b"``, ``"%Y-%m-%d %H:%M"``).
 
@@ -714,16 +729,137 @@ class PlotAccessor:
         The configured Axes.
 
         """
-        start = self._data.start_datetime
-        ax.xaxis.set_major_locator(_get_locator_from_offset(offset=x_ticks_res))
+        start, end = self._data.start_datetime, self._data.end_datetime
+
+        ax.set_xlim(start, end)
+
+        if x_ticks_res:
+            ax.xaxis.set_major_locator(
+                _get_locator_from_offset(offset=x_ticks_res),
+            )
+
         ax.xaxis.set_major_formatter(
             mdates.DateFormatter(
                 fmt=date_format,
                 tz=None if start is None else start.tz,
             ),
         )
-        ax.grid(linestyle="--", linewidth=0.2, axis="both", zorder=1)
+
+        ax.grid(
+            linestyle="--",
+            linewidth=0.2,
+            axis="both",
+            zorder=1,
+        )
         return ax
+
+    def feature(
+        self,
+        ax: Axes,
+        *,
+        legend: bool = True,
+        season: bool = False,
+        rise_set: bool = False,
+        effort: bool = False,
+        bin_size: Timedelta | BaseOffset | None = None,
+    ) -> Axes | None:
+        """Add optional overlays to an existing plot.
+
+        Call this method after creating a plot to add seasonal information,
+        sunrise/sunset times, or recording-effort shading. Coordinates are read
+        from ``data.coordinates`` and must be set before requesting ``season``
+        or ``rise_set``. On polar plots, ``rise_set`` adds a day/night band;
+        ``season`` and ``effort`` are not supported.
+
+        Parameters
+        ----------
+        ax: Axes
+            Matplotlib Axes to which the overlays are added.
+        legend: bool
+            Whether to display the legend after updating it with overlay entries.
+        season: bool
+            Whether to add a bar showing the seasons. Requires the recorder's
+            latitude in ``data.coordinates``.
+        rise_set: bool
+            Whether to show sunrise and sunset (or a day/night band on a polar
+            plot). Requires the recorder's latitude and longitude in
+            ``data.coordinates``.
+        effort: bool
+            Whether to shade periods without recording effort. Requires a
+            ``recording_file`` in the data configuration and is not supported
+            on polar plots.
+        bin_size: Timedelta | BaseOffset | None
+            Resolution used to aggregate recording effort. Defaults to the
+            detection time-bin duration.
+
+        Returns
+        -------
+        The Axes with the requested overlays and adjusted figure layout.
+
+        """
+        data = self._data
+        lat, lon = self._data.coordinates
+
+        if ax.name == "polar":
+            if season or effort:
+                msg = "Season and effort features are not supported on polar plots."
+                raise ValueError(msg)
+
+        if season:
+            if lat is None:
+                msg = "Latitude must be provided."
+                raise ValueError(msg)
+            add_season_period(ax, northern=lat >= 0)
+
+        if rise_set:
+            if (lat or lon) is None:
+                msg = "Coordinates must be provided."
+                raise ValueError(msg)
+
+            if ax.name == "polar":
+                self._add_polar_rise_set(ax=ax)
+
+            else:
+                tz = get_timezone(data.df)
+                if isinstance(tz, list):
+                    msg = "Several timezones not supported."
+                    raise ValueError(msg)
+                add_sunrise_sunset(ax, lat, lon, tz)
+
+        if effort:
+            effort_bin_size = bin_size or get_max_time(data.df)
+            if effort_bin_size is None:
+                msg = "Detection data are required to show recording effort."
+                raise ValueError(msg)
+            observed = RecordingEffort.from_config(
+                config=data.config,
+                bin_size=effort_bin_size,
+            )
+            shade_no_effort(ax=ax, observed=observed)
+
+        update_legend(ax)
+        if not legend:
+            legend_label = ax.get_legend()
+            if legend_label:
+                legend_label.remove()
+
+        return self._tight_layout(ax)
+
+    def _add_polar_rise_set(
+        self,
+        ax: Axes,
+    ) -> None:
+        """Draw the day/night band on a polar plot."""
+        lat, lon = self._data.coordinates
+        start, end = self._data.start_datetime, self._data.end_datetime
+        sunrise, sunset = get_sun_times(start, end, lat, lon)
+        sr_min, sr_max = min(sunrise), max(sunrise)
+        ss_min, ss_max = min(sunset), max(sunset)
+        arc(ax, 0, sr_min, "tab:blue")
+        arc(ax, sr_min, sr_max, "grey")
+        arc(ax, sr_max, ss_min, "gold")
+        arc(ax, ss_min, ss_max, "grey")
+        arc(ax, ss_max, 24, "tab:blue")
 
     # %% plots
 
@@ -734,11 +870,7 @@ class PlotAccessor:
         bin_size: Timedelta | BaseOffset,
         *,
         ax: Axes | None = None,
-        legend: bool = False,
-        season: bool = False,
-        color: str | list[str] | None = None,
-        effort: bool = False,
-        coordinates: tuple[float, float] | None = None,
+        **kwargs,
     ) -> Axes | None:
         """Plot a histogram of detections.
 
@@ -747,44 +879,51 @@ class PlotAccessor:
         ax: Axes | None
             Axes to plot on.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection.
         bin_size: Timedelta | BaseOffset
             Width of the bars.
-        legend: bool
-            Whether to show the legend.
-        season: bool
-            Whether to show the season bar. Requires the latitude.
-        color: str | list[str] | None
-            Color(s) of the bars.
-        effort: bool
-            If ``True``, data are normalized by the observation effort given by
-            the ``recording_file`` of the config.
-        coordinates: tuple[float, float] | None
-            Overrides ``data.coordinates``.
-
-        Returns
-        -------
-        The Axes, or ``None`` if there are too few detections to plot.
 
         """
         ax = self._get_ax(ax)
         data = self._data
-        df_filtered = data.filter_df(annotator, label)
-        lat, _ = self._coordinates(coordinates, required=season)
 
-        ax.set_xlim(data.start_datetime, data.end_datetime)
-        result = histo(
-            df=get_count(df_filtered, bin_size),
-            ax=ax,
-            bin_size=bin_size,
-            time_bin=Timedelta(df_filtered["end_time"].max(), "s"),
-            legend=legend,
-            season=season,
-            color=color,
-            effort=self._effort(effort, bin_size),
-            coordinates=(lat, None),
-        )
-        return self._tight_layout(result)
+        color = kwargs.pop("color", None)
+        labels, annotators = get_labels_and_annotators(data.filter_df(annotator, label))
+
+        total_rank = len(labels)
+
+        for i, (ann, lbl) in enumerate(zip(annotators, labels, strict=True)):
+            df_filtered = data.filter_df(ann, lbl)
+
+            if df_filtered.empty:
+                continue
+
+            bin_res = get_max_time(df_filtered)
+
+            if color:
+                kwargs["color"] = color[i]
+
+            if len(set(annotators)) == 1:
+                kwargs["label"] = labels[i]
+            elif len(set(labels)) == 1:
+                kwargs["label"] = annotators[i]
+            else:
+                kwargs["label"] = f"{annotators[i]} - {labels[i]}"
+
+            histo(
+                df=get_count(df_filtered, bin_size),
+                ax=ax,
+                bin_size=bin_size,
+                time_bin=bin_res,
+                rank=i,
+                total=total_rank,
+                **kwargs,
+            )
+
+        set_plot_title(ax, annotators, labels)
+        update_legend(ax)
+        self.set_ax(ax)
+        return self._tight_layout(ax)
 
     def polar(
         self,
@@ -792,9 +931,7 @@ class PlotAccessor:
         label: str | list[str],
         *,
         ax: Axes | None = None,
-        show_rise_set: bool = False,
-        coordinates: tuple[float, float] | None = None,
-        **bar_kwargs: Any,  # ruff: ignore[any-type]
+        **kwargs: Any,
     ) -> tuple[Axes, Series]:
         """Plot the mean proportion of detected bins per hour of the day.
 
@@ -803,12 +940,8 @@ class PlotAccessor:
         ax: Axes | None
             Optional polar Axes; created with a polar projection when omitted.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
-        show_rise_set: bool
-            Whether to draw the day/night band. Requires the coordinates.
-        coordinates: tuple[float, float] | None
-            Overrides ``data.coordinates``.
-        **bar_kwargs
+            Selection, see :meth:`DetectionData.filter_df`.
+        **kwargs
             Forwarded to ``ax.bar`` (color, alpha, edgecolor...).
 
         Returns
@@ -817,28 +950,23 @@ class PlotAccessor:
 
         """
         ax = self._get_ax(ax, polar=True)
-        coords = self._coordinates(coordinates, required=show_rise_set)
+
         result = polar(
             df=self._data.filter_df(annotator, label),
             ax=ax,
-            show_rise_set=show_rise_set,
-            coordinates=coords,
-            **bar_kwargs,
+            **kwargs,
         )
+
         self._tight_layout(ax)
         return result
 
-    def heatmap(  # ruff: ignore[too-many-arguments]
+    def heatmap(
         self,
         annotator: str | list[str],
         label: str | list[str],
         bin_size: Timedelta | BaseOffset,
         *,
         ax: Axes | None = None,
-        show_rise_set: bool = True,
-        season: bool = False,
-        effort: bool = False,
-        coordinates: tuple[float, float] | None = None,
     ) -> Axes:
         """Plot a heatmap of detections (hour of day vs. time).
 
@@ -847,49 +975,32 @@ class PlotAccessor:
         ax: Axes | None
             Optional Axes to plot on; created automatically when omitted.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection.
         bin_size: Timedelta | BaseOffset
             Size of the cells. Must be >= 24h.
-        show_rise_set: bool
-            Whether to overlay sunrise and sunset.
-        season: bool
-            Whether to show the season bar.
-        effort: bool
-            Whether to shade the periods without recording effort.
-        coordinates: tuple[float, float] | None
-            Overrides ``data.coordinates``. Required.
 
         """
         ax = self._get_ax(ax)
         data = self._data
-        coords = self._coordinates(coordinates, required=True)
         df_filtered = data.filter_df(annotator, label)
 
-        ax.set_xlim(data.start_datetime, data.end_datetime)
-        result = heatmap(
+        heatmap(
             df=df_filtered,
             ax=ax,
             bin_size=bin_size,
             time_range=date_range(data.start_datetime, data.end_datetime),
-            show_rise_set=show_rise_set,
-            season=season,
-            effort=self._effort(effort, bin_size),
-            coordinates=coords,
         )
-        self._tight_layout(ax)
-        return result
 
-    def scatter(  # ruff: ignore[too-many-arguments]
+        return self._tight_layout(ax)
+
+    def scatter(
         self,
         annotator: str | list[str],
         label: str | list[str],
         *,
         ax: Axes | None = None,
         bin_size: Timedelta | BaseOffset | None = None,
-        show_rise_set: bool = True,
-        season: bool = False,
-        effort: bool = False,
-        coordinates: tuple[float, float] | None = None,
+        **kwargs: Any,
     ) -> Axes:
         """Scatter-plot detections (hour of day vs. time).
 
@@ -898,52 +1009,48 @@ class PlotAccessor:
         ax: Axes | None
             Optional Axes to plot on; created automatically when omitted.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection, see :meth:`DetectionData.filter_df`.
         bin_size: Timedelta | BaseOffset | None
-            Resolution of the time vector. Defaults to the detection duration.
-        show_rise_set: bool
-            Whether to overlay sunrise and sunset.
-        season: bool
-            Whether to show the season bar.
-        effort: bool
-            Whether to shade the periods without recording effort.
-        coordinates: tuple[float, float] | None
-            Overrides ``data.coordinates``. Required.
+            Accepted for compatibility; it currently does not affect the plot.
+        **kwargs
+            Additional styling options forwarded to ``ax.scatter``.
 
         """
         ax = self._get_ax(ax)
         data = self._data
-        coords = self._coordinates(coordinates, required=True)
-        df_filtered = data.filter_df(annotator, label)
+
         bin_size = bin_size or get_max_time(data.df)
 
-        ax.set_xlim(data.start_datetime, data.end_datetime)
-        scatter(
-            df=df_filtered,
-            ax=ax,
-            time_range=date_range(
-                start=data.start_datetime,
-                end=data.end_datetime,
-                freq=bin_size,
-            ),
-            show_rise_set=show_rise_set,
-            season=season,
-            coordinates=coords,
-            effort=self._effort(effort, bin_size),
-        )
+        labels, annotators = get_labels_and_annotators(data.filter_df(annotator, label))
+
+        for ann, lbl in zip(annotators, labels, strict=True):
+            df_filtered = data.filter_df(ann, lbl)
+
+            if df_filtered.empty:
+                continue
+
+            scatter(
+                df=df_filtered,
+                ax=ax,
+                # time_range=date_range(
+                #     start=data.start_datetime,
+                #     end=data.end_datetime,
+                #     freq=bin_size,
+                # ),
+                **kwargs,
+            )
+
+        update_legend(ax)
+
         return self._tight_layout(ax)
 
-    def timeline(  # ruff: ignore[too-many-arguments]
+    def timeline(
         self,
         annotator: str | list[str],
         label: str | list[str],
         *,
         ax: Axes | None = None,
         color: list[str] | None = None,
-        season: bool = False,
-        effort: bool = False,
-        bin_size: Timedelta | BaseOffset | None = None,
-        coordinates: tuple[float, float] | None = None,
     ) -> Axes:
         """Plot detections on a timeline, one row per label.
 
@@ -952,22 +1059,13 @@ class PlotAccessor:
         ax: Axes | None
             Optional Axes to plot on; created automatically when omitted.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection, see :meth:`DetectionData.filter_df`.
         color: list[str] | None
             One color per label.
-        season: bool
-            Whether to show the season bar. Requires the latitude.
-        effort: bool
-            Whether to shade the periods without recording effort.
-        bin_size: Timedelta | BaseOffset | None
-            Resolution of the effort. Defaults to the detection duration.
-        coordinates: tuple[float, float] | None
-            Overrides ``data.coordinates``.
 
         """
         ax = self._get_ax(ax)
         data = self._data
-        coords = self._coordinates(coordinates, required=season)
         df_filtered = data.filter_df(annotator, label)
 
         ax.set_xlim(data.start_datetime, data.end_datetime)
@@ -975,9 +1073,6 @@ class PlotAccessor:
             df=df_filtered,
             ax=ax,
             color=color,
-            season=season,
-            coordinates=coords,
-            effort=self._effort(effort, bin_size or get_max_time(df_filtered)),
         )
         self._tight_layout(ax)
         return result

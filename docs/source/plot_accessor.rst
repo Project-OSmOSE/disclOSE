@@ -8,5 +8,5 @@ PlotAccessor
 Like in pandas, ``data.plot("polar", ...)`` is equivalent to ``data.plot.polar(...)``.
 
 .. autoclass:: disclose.dataclass.detection_data.PlotAccessor
-   :members: histogram, polar, heatmap, scatter, timeline, agreement, set_ax
+   :members: histogram, polar, heatmap, scatter, timeline, agreement, set_ax, feature
    :special-members: __call__

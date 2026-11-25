@@ -66,6 +66,7 @@ class DetectionConfig:
 
     @classmethod
     def empty(cls) -> DetectionConfig:
+        """Return a configuration with all fields left at their defaults."""
         return cls()
 
     @classmethod
@@ -81,7 +82,7 @@ class DetectionConfig:
 
     @classmethod
     def merge(cls, configs: list[DetectionConfig]) -> DetectionConfig:
-        """Merge several configurations."""
+        """Combine configuration values from several objects."""
         if not configs:
             return cls.empty()
 

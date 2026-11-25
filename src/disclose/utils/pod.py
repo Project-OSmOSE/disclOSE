@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from itertools import cycle
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -218,22 +218,24 @@ def process_feeding_buzz(
     df: DataFrame,
     species: str,
 ) -> DataFrame:
-    """Process a POD feeding buzz detection DataFrame.
+    """Classify inter-click intervals and summarize buzz events by minute.
 
-    Give the feeding buzz duration, depending on the studied species
-    (`delphinid`, `porpoise` or `commerson`).
+    An interval is marked as a buzz when it is no longer than the species-specific
+    threshold: 20 ms for ``delphinid``, 10 ms for ``porpoise``, or 5 ms for
+    ``commerson``. The input DataFrame is modified in place.
 
     Parameters
     ----------
     df: DataFrame
-        Path to cpod.exe feeding buzz file
+        Feeding-buzz detections with a ``Datetime`` column.
     species: str
-        Select the species to use between porpoise and Commerson's dolphin
+        One of ``"delphinid"``, ``"porpoise"``, or ``"commerson"``.
 
     Returns
     -------
     DataFrame
-        Containing all ICIs for every positive minute to click
+        One row per minute, with the summed ``Buzz`` intervals and ``fbm_count``
+        flag indicating whether the minute contains any buzz interval.
 
     """
     df["ICI"] = df["Datetime"].diff()
@@ -280,7 +282,10 @@ def process_feeding_buzz(
 
 
 def compute_ici(df: DataFrame) -> DataFrame:
-    """Calculate Inter-Click Intervals (in minutes) from feeding buzz timestamps."""
+    """Add positive inter-click intervals in minutes and discard non-positive ones.
+
+    The input is copied; the returned rows include an ``ICI_minutes`` column.
+    """
     df = df.copy()
     df["ICI_minutes"] = df["Datetime"].diff().dt.total_seconds() / 60
     return df[df["ICI_minutes"] > 0].dropna(subset=["ICI_minutes"])
@@ -320,7 +325,11 @@ def fit_gmm(df: DataFrame, comp: int) -> tuple[DataFrame, ndarray, GaussianMixtu
 
 
 def cluster_info(gmm: GaussianMixture) -> list[dict]:
-    """Extract per-component statistics from a fitted GMM, sorted by ascending mean."""
+    """Return per-component statistics ordered by ascending fitted mean.
+
+    The component names are selected from a fixed three-name list, so the model
+    must have at most three components.
+    """
     component_names = ["Buzz ICIs", "Regular ICIs", "Long ICIs"]
     sorted_means = sort(gmm.means_, axis=0)
 
@@ -433,21 +442,29 @@ def plot_gmm_ici(df: DataFrame, comp: int) -> tuple[plt.Figure, plt.Axes]:
     return fig, ax
 
 
-def process_timelost(df: DataFrame, threshold: int = 0) -> Series[Any]:
+def process_timelost(df: DataFrame, threshold: int = 0) -> DataFrame:
     """Process TimeLost DataFrame.
 
-    Returns relevant columns and reshape into hourly data.
+    Floors ``Datetime`` values to the hour, keeps rows whose ``%TimeLost`` is no
+    greater than ``threshold``, and drops unrelated columns. The input is modified
+    when its ``Datetime`` column is floored.
 
     Parameters
     ----------
     df: DataFrame
         All your Environmental data files.
-    threshold: float
-        TimeLost threshold.
+    threshold: int
+        Maximum allowed ``%TimeLost`` value, from 0 to 100 inclusive.
 
     Returns
     -------
-    %TimeLost DataFrame.
+    DataFrame
+        Filtered rows with the relevant environmental columns.
+
+    Raises
+    ------
+    ValueError
+        If ``threshold`` is outside the range 0–100.
 
     """
     if threshold not in range(101):
@@ -512,17 +529,17 @@ def percent_calc(
     data: DataFrame,
     time_unit: str | None = None,
 ) -> DataFrame:
-    """Calculate % of clicks, feeding buzzes and positive hours to detection.
+    """Calculate click, buzz, positive-hour, and feeding-buzz-ratio percentages.
 
-    Computed on the entire effort and for every site.
+    Values are aggregated by ``time_unit`` across all rows in each group.
 
     Parameters
     ----------
     data: DataFrame
         All values concatenated
 
-    time_unit: str
-        Time unit you want to group your data in
+    time_unit: str | None
+        Grouping column name. It must identify a column in ``data``.
 
     Returns
     -------
@@ -651,10 +668,9 @@ default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
 
 def get_group_colors(df: DataFrame, group_col: str) -> dict[str, str]:
-    """Map each unique value of `group_col` to a stable color.
+    """Map each unique value of ``group_col`` to a color from Matplotlib's cycle.
 
-    Mirrors `get_colors`, but keys colors by group label instead of
-    by column position (needed since bars share colors within a group).
+    Values are assigned in the order returned by ``df[group_col].unique()``.
     """
     groups = df[group_col].unique()
     color_cycle = cycle(default_colors)
@@ -700,22 +716,21 @@ def percent_barplot(
     Parameters
     ----------
     df: DataFrame
-        Data containing at least `x` and the grouping column, plus either:
-        - a plain `metric` column, or
-        - two `f"{metric}_mean"` and `f"{metric}_std"` columns used if `show_std` is selected.
+        Data containing the x-axis column, the grouping column (default
+        ``Site``), and a column holding metric values. A matching standard
+        deviation column is needed only when ``show_std=True``.
     x: str
         Column used for the x-axis categories (e.g. a time unit).
     metric: str
-        Name of the value plotted on the y-axis (e.g. "%buzzes", "FBR", "%FBh").
-        Resolved to `mean_col` (see below) to find the actual data column.
+        Metric name used for the title, y-axis, defaults, and hatch selection.
     ax: matplotlib.axes.Axes, optional
         Axes to draw on. A new figure/axes is created if not provided,
-        matching the `ax`-as-parameter pattern used by `histo`/`timeline`.
+        A new figure and axes are created if not provided.
     **kwargs: Additional keyword arguments.
         - group_col: str
             Column used to color bars by group (default "Site").
         - colors: dict[str, str]
-            Explicit {group: color} mapping. Overrides auto-assigned colors.
+            Explicit group-to-color mapping. Overrides auto-assigned colors.
         - hatch_metrics: set[str]
             Metric names that should be drawn with a hatch pattern
             (default {"%buzzes", "FBR", "%FBh"}).
@@ -736,6 +751,12 @@ def percent_barplot(
         - std_col: str
             Column holding std values. Defaults to `f"{metric}_std"`.
             Ignored if `show_std` is False.
+
+    Returns
+    -------
+    matplotlib.axes.Axes | None
+        The plotted axes, or ``None`` if the input is empty or the selected
+        metric column contains only missing values.
 
     """
     mean_col = kwargs.get("mean_col") or (

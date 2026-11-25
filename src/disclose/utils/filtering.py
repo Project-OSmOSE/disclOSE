@@ -62,20 +62,25 @@ def find_delimiter(file: Path) -> str:
 def filter_strong_detection(
     df: DataFrame,
 ) -> DataFrame:
-    """Filter to keep only weak detections (exclude box/strong detections).
+    """Keep only ``WEAK`` detections, excluding other detection types.
 
-    This function identifies and removes "strong" or "box" type detections,
-    keeping only "weak" detections. It checks for either an 'is_box' or 'type' column.
+    The input must have a ``type`` column; legacy ``is_box`` values are
+    normalized by :func:`read_dataframe` before this helper is called.
 
     Parameters
     ----------
     df : DataFrame
-        APLOSE-formatted DataFrame with either 'is_box' or 'type' column.
+        APLOSE-formatted DataFrame with a ``type`` column.
 
     Returns
     -------
     DataFrame
         Filtered DataFrame containing only weak detections.
+
+    Raises
+    ------
+    ValueError
+        If the ``type`` column is missing.
 
     """
     if "type" in df.columns:
@@ -105,7 +110,8 @@ def filter_by_time(
     Returns
     -------
     DataFrame
-        Filtered DataFrame containing only detections within the specified time range.
+        Filtered DataFrame containing only detections fully contained in the
+        specified time range.
 
     """
     if begin is not None:
@@ -195,7 +201,7 @@ def filter_by_freq(
     Parameters
     ----------
     df : DataFrame
-        APLOSE DataFrame containing 'start_frequency' and 'end_frequency' columns.
+        APLOSE DataFrame containing ``min_frequency`` and ``max_frequency`` columns.
     f_min : float, optional
         Minimum frequency in Hz (inclusive). If None, no lower bound is applied.
     f_max : float, optional
@@ -204,7 +210,8 @@ def filter_by_freq(
     Returns
     -------
     DataFrame
-        Filtered DataFrame with only detections within the specified frequency range.
+        Filtered DataFrame with detections whose full frequency bounds lie within
+        the specified range.
 
     """
     if f_min is not None:
@@ -228,8 +235,9 @@ def filter_by_confidence(df: DataFrame, confidence: float | None) -> DataFrame:
     ----------
     df : DataFrame
         APLOSE-formatted DataFrame containing a 'confidence' column.
-    confidence : float
-        The minimum confidence threshold (inclusive).
+    confidence : float | None
+        Minimum confidence threshold (inclusive). ``None`` or ``0`` leaves the
+        DataFrame unchanged; if the column is absent, it is also left unchanged.
 
     Returns
     -------
@@ -257,7 +265,12 @@ def drop_legacy_if_new_exists(df: DataFrame, legacy: str, new: str) -> DataFrame
 
 
 def read_dataframe(file: Path, rows: int | None = None) -> DataFrame:
-    """Read an APLOSE-formatted CSV file into a DataFrame."""
+    """Read and normalize an APLOSE CSV file.
+
+    Legacy frequency, annotation, score, and box-type columns are renamed to
+    their current equivalents, duplicate rows are removed, and rows without a
+    label are dropped.
+    """
     delimiter = find_delimiter(file)
 
     df = read_csv(
@@ -295,7 +308,7 @@ def read_dataframe(file: Path, rows: int | None = None) -> DataFrame:
 
 
 def get_annotators(df: DataFrame) -> str | list[str]:
-    """Return the annotator list of APLOSE DataFrame."""
+    """Return the sorted annotator name(s), or ``None`` when ``df`` is empty."""
     if df.empty:
         return None
     annotators = sorted(set(df["annotator"]))
@@ -303,7 +316,7 @@ def get_annotators(df: DataFrame) -> str | list[str]:
 
 
 def get_labels(df: DataFrame) -> str | list[str]:
-    """Return the label list of APLOSE DataFrame."""
+    """Return the sorted label name(s), or ``None`` when ``df`` is empty."""
     if df.empty:
         return None
     labels = sorted(set(df["label"]))
@@ -311,21 +324,21 @@ def get_labels(df: DataFrame) -> str | list[str]:
 
 
 def get_max_freq(df: DataFrame) -> float:
-    """Return the maximum frequency of APLOSE DataFrame."""
+    """Return the maximum ``max_frequency`` value, or ``None`` for empty input."""
     if df.empty:
         return None
     return df["max_frequency"].max()
 
 
 def get_max_time(df: DataFrame) -> Timedelta | None:
-    """Return the maximum time of APLOSE DataFrame."""
+    """Convert the largest ``end_time`` value (seconds) to a ``Timedelta``."""
     if df.empty:
         return None
     return Timedelta(df["end_time"].max(), "s")
 
 
-def get_dataset(df: DataFrame) -> str | list[str]:
-    """Return dataset list of APLOSE DataFrame."""
+def get_dataset(df: DataFrame) -> str | list[str] | None:
+    """Return the sorted dataset name(s), or ``None`` when ``df`` is empty."""
     if df.empty:
         return None
     datasets = sorted(set(df["dataset"]))
@@ -374,8 +387,9 @@ def get_timezone(
 
     Returns
     -------
-    tzoffset: list[tzoffset]
-        list of timezones
+    pytz.tzinfo.BaseTzInfo | list[pytz.tzinfo.BaseTzInfo]
+        The single canonical timezone if there is one, otherwise a list of
+        canonical timezones found in ``start_datetime``.
 
     """
     timezones = {get_canonical_tz(ts.tzinfo) for ts in df["start_datetime"]}
@@ -386,15 +400,19 @@ def get_timezone(
 
 
 def check_timestamp(df: DataFrame, timestamp_audio: list[Timestamp] | None) -> None:
-    """Check if a provided timestamp_audio list is correctly formated.
+    """Check that audio-start timestamps are provided and match the row count.
 
     Parameters
     ----------
     df: DataFrame
         APLOSE results Dataframe.
-    timestamp_audio: list[Timestamp]
-        A list of timestamps. Each timestamp is
-        the start datetime of the corresponding audio file for each detection in df.
+    timestamp_audio: list[Timestamp] | None
+        Audio-file start timestamp corresponding to each detection row.
+
+    Raises
+    ------
+    ValueError
+        If timestamps are ``None`` or their count differs from the number of rows.
 
     """
     if timestamp_audio is None:
@@ -642,19 +660,20 @@ def parse_unique_timestamps(values: Series, datetime_template: str) -> Series:
 
 
 def get_filename_timestamps(df: DataFrame, date_parser: str) -> list[Timestamp]:
-    """Get audio file start timestamps of each detection contained in df.
+    """Parse audio-file start timestamps from each detection's filename.
 
     Parameters.
     ----------
     df: DataFrame
         An APLOSE result DataFrame.
     date_parser: str
-        date parser of the wav file
+        Format string used to parse timestamps from the filenames.
 
     Returns
     -------
-    List of Timestamps corresponding to the wav files' start timestamps
-    of each detection contained in df.
+    list[Timestamp]
+        Parsed audio-file start time for each detection row, localized to the
+        DataFrame timezone when the parsed values are naive.
 
     """
     tz = get_timezone(df)
@@ -667,14 +686,14 @@ def get_filename_timestamps(df: DataFrame, date_parser: str) -> list[Timestamp]:
 
 
 def ensure_in_list(value: str, candidates: list[str], label: str) -> None:
-    """Check for non-valid elements of a list."""
+    """Raise ``ValueError`` if ``value`` is not in ``candidates``."""
     if value not in candidates:
         msg = f"'{value}' not present in {label}, upload aborted"
         raise ValueError(msg)
 
 
 def ensure_no_invalid(invalid: list[str], label: str) -> None:
-    """Return non-valid elements of a list."""
+    """Raise ``ValueError`` if ``invalid`` contains any values."""
     if invalid:
         msg = f"'{invalid}' not present in {label}, upload aborted"
         raise ValueError(msg)
@@ -722,7 +741,10 @@ def add_weak_detection(
     max_time: Timedelta | None = None,
     max_freq: float | None = None,
 ) -> DataFrame:
-    """Add weak detections APLOSE formatted DataFrame with only strong detections.
+    """Add one weak detection per file/label/annotator to an APLOSE DataFrame.
+
+    The input is copied. Weak detections are added for file/label pairs that
+    already have at least one row in the input.
 
     Parameters
     ----------
@@ -734,6 +756,11 @@ def add_weak_detection(
         Size of the weak detections
     max_freq: float
         Height of the weak detections
+
+    Returns
+    -------
+    DataFrame
+        The original rows plus the generated weak detections.
 
     """
     df = df.copy()
@@ -799,7 +826,32 @@ def intersection_or_union(
     user_sel: str,
     effort: Any | None = None,
 ) -> DataFrame:
-    """Compute intersection or union of detections from multiple annotators."""
+    """Select time bins detected by all annotators or by at least one.
+
+    At least two annotators are required for every selection. ``user_sel`` may
+    be ``"intersection"``, ``"union"``, or ``"all"``; ``"all"`` returns the
+    input unchanged after the annotator check.
+
+    Parameters
+    ----------
+    df : DataFrame
+        APLOSE-formatted detections from multiple annotators.
+    user_sel : str
+        Selection to apply: ``"intersection"``, ``"union"``, or ``"all"``.
+    effort : Any | None
+        Optional recording effort used to restrict the compared time bins.
+
+    Returns
+    -------
+    DataFrame
+        Selected detections. For intersection/union, annotator, label, and
+        dataset values identify the combined selection.
+
+    Raises
+    ------
+    ValueError
+        If fewer than two annotators are present or ``user_sel`` is unsupported.
+    """
     annotators = get_annotators(df)
     annotators = [annotators] if isinstance(annotators, str) else annotators
     if annotators is None or len(annotators) <= 1:

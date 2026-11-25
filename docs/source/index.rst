@@ -26,6 +26,14 @@ Instructions on how to use **disclOSE**.
 
 ====================
 
+:ref:`Examples <examples>`
+----------------------------------
+
+A demonstration of how to use **disclOSE** functionalities.
+
+
+====================
+
 :doc:`API <api>`
 ----------------------------------
 
