@@ -665,8 +665,8 @@ def test_gmm_feeding_buzz(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["Buzz"].tolist() == [2.0, 0.0]
     assert result["fbm_count"].tolist() == [1, 0]
     assert result["start_datetime"].tolist() == [
-        Timestamp("2024-01-01 12:00"),
-        Timestamp("2024-01-01 12:01"),
+        Timestamp("2024-01-01 12:00", tz="UTC"),
+        Timestamp("2024-01-01 12:01", tz="UTC"),
     ]
 
 

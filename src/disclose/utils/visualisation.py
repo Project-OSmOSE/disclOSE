@@ -223,6 +223,7 @@ def scatter(
         ts.hour + ts.minute / 60 + ts.second / 3600 for ts in df["start_datetime"]
     ]
 
+    kwargs.setdefault("marker", "x")
     ax.scatter(
         df["start_datetime"],
         detect_time_dec,

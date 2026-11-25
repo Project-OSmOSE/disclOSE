@@ -13,6 +13,7 @@ from matplotlib.axes import Axes
 from pandas import DataFrame, Timedelta, Timestamp
 from pandas.tseries import frequencies
 
+from disclose.dataclass.detection_config import DetectionConfig
 from disclose.dataclass.detection_data import (
     DetectionData,
     PlotAccessor,
@@ -55,6 +56,42 @@ def test_data_aplose_init(sample_df: DataFrame) -> None:
     assert data.dataset == "sample_dataset"
     assert data.start_datetime == sample_df["start_datetime"].min()
     assert data.end_datetime == sample_df["end_datetime"].max()
+
+
+def _dpm_data(annotator: str) -> DetectionData:
+    start_datetime = [
+        Timestamp("2025-01-25 00:00:10"),
+        Timestamp("2025-01-25 00:01:10"),
+    ]
+    df = DataFrame({
+        "dataset": ["dataset", "dataset"],
+        "filename": ["file1", "file2"],
+        "start_datetime": start_datetime,
+        "end_datetime": [ts + Timedelta(seconds=10) for ts in start_datetime],
+        "start_time": [10, 70],
+        "end_time": [20, 80],
+        "label": ["label", "label"],
+        "annotator": [annotator, annotator],
+    })
+    config = DetectionConfig(timebin_new=Timedelta(minutes=1))
+    return DetectionData(df, config=config)
+
+
+@pytest.mark.parametrize("annotator", ["FPOD", "CPOD"])
+def test_add_dpm_supported_annotators(annotator: str) -> None:
+    data = _dpm_data(annotator)
+
+    data.add_dpm()
+
+    assert data.df["dpm_count"].tolist() == [1, 1]
+
+
+def test_add_dpm_ignores_other_annotators() -> None:
+    data = _dpm_data("ann1")
+
+    data.add_dpm()
+
+    assert data.df["dpm_count"].isna().all()
 
 
 @pytest.mark.parametrize(
@@ -753,7 +790,6 @@ def test_scatter_plot(sample_csv_result: Path, recording_planning_csv: Path) -> 
         annotator="ann1",
         label="lbl1",
         ax=ax,
-        bin_size=Timedelta("12h"),
     )
     assert len(ax.lines) == 0
     assert not isinstance(ax.xaxis.get_major_formatter(), mdates.DateFormatter)
