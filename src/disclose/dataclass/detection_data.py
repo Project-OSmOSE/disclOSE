@@ -751,28 +751,38 @@ class PlotAccessor:
         effort: bool = False,
         bin_size: Timedelta | BaseOffset | None = None,
     ) -> Axes | None:
-        """Add optional overlays to a plot.
+        """Add optional overlays to an existing plot.
+
+        Call this method after creating a plot to add seasonal information,
+        sunrise/sunset times, or recording-effort shading. Coordinates are read
+        from ``data.coordinates`` and must be set before requesting ``season``
+        or ``rise_set``. On polar plots, ``rise_set`` adds a day/night band;
+        ``season`` and ``effort`` are not supported.
 
         Parameters
         ----------
         ax: Axes
-            Axes to add features to.
+            Matplotlib Axes to which the overlays are added.
         legend: bool
-            Whether to show le legend of the plot.
+            Whether to display the legend after updating it with overlay entries.
         season: bool
-            Whether to show the season bar.
+            Whether to add a bar showing the seasons. Requires the recorder's
+            latitude in ``data.coordinates``.
         rise_set: bool
-            Whether to show sunrise and sunset (or day/night on a polar plot).
+            Whether to show sunrise and sunset (or a day/night band on a polar
+            plot). Requires the recorder's latitude and longitude in
+            ``data.coordinates``.
         effort: bool
-            Whether to shade periods without recording effort.
+            Whether to shade periods without recording effort. Requires a
+            ``recording_file`` in the data configuration and is not supported
+            on polar plots.
         bin_size: Timedelta | BaseOffset | None
             Resolution used to aggregate recording effort. Defaults to the
-            detection duration.
-
+            detection time-bin duration.
 
         Returns
         -------
-        The Axes with the requested features.
+        The Axes with the requested overlays and adjusted figure layout.
 
         """
         data = self._data

@@ -215,7 +215,7 @@ Each method accepts an optional keyword-only ``ax``; a new one is created when i
     data.plot.feature(ax, season=True, rise_set=True, effort=True)
 
 Plots that show sunrise/sunset or the seasons need coordinates:
-set ``data.coordinates`` or pass ``coordinates=(lat, lon)`` to ``feature``.
+set ``data.coordinates = (lat, lon)`` before calling ``data.plot.feature``.
 
 Metrics
 -------
