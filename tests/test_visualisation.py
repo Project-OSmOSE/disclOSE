@@ -1,5 +1,3 @@
-from unittest.mock import Mock
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -11,7 +9,6 @@ from pandas import (
     Timedelta,
     Timestamp,
     date_range,
-    concat,
 )
 from pandas.tseries import frequencies
 
@@ -218,41 +215,7 @@ def test_polar_default_alpha_is_one(sample_df: DataFrame, polar_ax: Axes) -> Non
     assert polar_ax.patches[0].get_facecolor() == to_rgba("red", 1)
 
 
-def test_polar_ignores_bin_size_kwarg(sample_df: DataFrame, polar_ax: Axes) -> None:
-    # `plot()` forwards bin_size, which has no meaning for polar
-    polar(sample_df, ax=polar_ax)
-
-
-def test_polar_rise_set_requires_coordinates(
-    sample_df: DataFrame,
-    polar_ax: Axes,
-) -> None:
-    with pytest.raises(ValueError, match="`coordinates` is required"):
-        polar(sample_df, ax=polar_ax, show_rise_set=True)
-
-
-def test_polar_rise_set_draws_day_night_arcs(
-    monkeypatch: pytest.MonkeyPatch,
-    sample_df: DataFrame,
-    polar_ax: Axes,
-) -> None:
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.get_sun_times",
-        lambda *args, **kwargs: ([7.0, 7.5], [17.0, 17.5]),
-    )
-
-    polar(sample_df, ax=polar_ax, show_rise_set=True, coordinates=(48.39, -4.49))
-
-    arcs = polar_ax.patches[24:]  # after the 24 hourly bars
-    assert [p.get_facecolor() for p in arcs] == [
-        to_rgba(c) for c in ("tab:blue", "grey", "gold", "grey", "tab:blue")
-    ]
-
-    # the 5 arcs cover the whole day without overlap
-    assert sum(p.get_width() for p in arcs) == pytest.approx(2 * np.pi)
-
-
-def test_polar_without_rise_set_draws_no_arcs(
+def test_polar_draws_one_bar_per_hour(
     sample_df: DataFrame,
     polar_ax: Axes,
 ) -> None:
@@ -275,33 +238,15 @@ def test_histo_labels_and_bars(ax: Axes, df_counts: DataFrame) -> None:
         ax=ax,
         bin_size=Timedelta("1D"),
         time_bin=Timedelta("10s"),
+        rank=0,
+        total=1,
         color="tab:blue",
-        coordinates=(None, None),
     )
 
     assert len(ax.patches) == len(df_counts)
     assert [p.get_height() for p in ax.patches] == df_counts["lbl1-ann1"].tolist()
     assert ax.get_ylabel() == "Detections (10s)"
     assert ax.get_xlabel() == "Bin size (1D)"
-    assert ax.get_title() == "annotator: ann1\nlabel: lbl1"
-
-
-def test_histo_not_enough_data(
-    ax: Axes,
-    df_counts: DataFrame,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    with caplog.at_level("WARNING"):
-        histo(
-            df=df_counts.iloc[:1],
-            ax=ax,
-            bin_size=Timedelta("1D"),
-            time_bin=Timedelta("10s"),
-            coordinates=(None, None),
-        )
-
-    assert "do not contains enough detections" in caplog.text
-    assert len(ax.patches) == 0
 
 
 # %% _prepare_timeline_plot
@@ -325,36 +270,14 @@ def test_prepare_timeline_plot_axes(
 def test_scatter_points_and_legend(
     ax: Axes,
     df_ann1_lbl1: DataFrame,
-    time_range: DatetimeIndex,
 ) -> None:
-    scatter(df_ann1_lbl1, ax, time_range, coordinates=(0, 0))
+    scatter(df_ann1_lbl1, ax)
     update_legend(ax)
 
     assert len(ax.collections) == 1
     assert len(ax.collections[0].get_offsets()) == len(df_ann1_lbl1)
     assert [t.get_text() for t in ax.get_legend().get_texts()] == ["ann1 - lbl1"]
     assert ax.get_ylim() == (0, 24)
-
-
-def test_scatter_several_timezones(
-    ax: Axes,
-    df_ann1_lbl1: DataFrame,
-    time_range: DatetimeIndex,
-) -> None:
-    row = df_ann1_lbl1.loc[0]
-    row["start_datetime"] = (
-        df_ann1_lbl1["start_datetime"].iloc[0].tz_convert("Europe/Paris")
-    )
-    df_tz = concat([df_ann1_lbl1, row.to_frame().T], ignore_index=True)
-
-    with pytest.raises(ValueError, match=r"Several timezones not supported"):
-        scatter(
-            df_tz,
-            ax,
-            time_range=time_range,
-            coordinates=(0, 0),
-            show_rise_set=True,
-        )
 
 
 # %% heatmap
@@ -370,8 +293,6 @@ def test_heatmap_counts_all_detections(
         ax,
         bin_size=frequencies.to_offset("1D"),
         time_range=time_range,
-        coordinates=(0, 0),
-        show_rise_set=True,
     )
 
     mat = ax.images[0].get_array()
@@ -379,28 +300,6 @@ def test_heatmap_counts_all_detections(
     assert mat.sum() == len(df_ann1_lbl1)
     assert ax.get_ylabel() == "Detections per hour of day (10s)"
     assert ax.get_xlabel() == "Time (1D bin)"
-
-
-def test_heatmap_several_timezones(
-    ax: Axes,
-    df_ann1_lbl1: DataFrame,
-    time_range: DatetimeIndex,
-) -> None:
-    row = df_ann1_lbl1.loc[0]
-    row["start_datetime"] = (
-        df_ann1_lbl1["start_datetime"].iloc[0].tz_convert("Europe/Paris")
-    )
-    df_tz = concat([df_ann1_lbl1, row.to_frame().T], ignore_index=True)
-
-    with pytest.raises(ValueError, match=r"Several timezones not supported"):
-        heatmap(
-            df_tz,
-            ax,
-            bin_size=frequencies.to_offset("1D"),
-            time_range=time_range,
-            coordinates=(0, 0),
-            show_rise_set=True,
-        )
 
 
 # %% timeline
@@ -429,9 +328,6 @@ def test_timeline_custom_colors(ax: Axes, sample_df: DataFrame) -> None:
     assert ax.collections[1].get_facecolor()[0].tolist() == list(to_rgba("blue"))
 
 
-# %% add_sunrise_sunset
-
-
 # %% polar
 
 
@@ -441,213 +337,18 @@ def test_polar_creates_polar_axes_when_none(sample_df: DataFrame) -> None:
     assert ax.name == "polar"
 
 
-def test_histo_without_coordinates(ax: Axes, df_counts: DataFrame) -> None:
-    histo(
-        df=df_counts,
-        ax=ax,
-        bin_size=Timedelta("1D"),
-        time_bin=Timedelta("10s"),
-    )
-
-    assert len(ax.patches) == len(df_counts)
-
-
-# %% extras
-
-
-def test_histo_explicit_color_sequence(ax: Axes, sample_df_counts: DataFrame) -> None:
-    histo(
-        df=sample_df_counts,
-        ax=ax,
-        bin_size=Timedelta("10min"),
-        time_bin=Timedelta("1min"),
-        color=["red", "blue"],
-        coordinates=(48.0, -4.0),
-        legend=True,
-    )
-    assert len(ax.patches) == 2 * len(sample_df_counts)
-    assert all(
-        p.get_facecolor() == to_rgba("red") for p in ax.patches[: len(sample_df_counts)]
-    )
-    assert all(
-        p.get_facecolor() == to_rgba("blue")
-        for p in ax.patches[len(sample_df_counts) :]
-    )
-
-
-def test_histo_rejects_wrong_number_of_colors(
-    ax: Axes,
-    sample_df_counts: DataFrame,
-) -> None:
-    with pytest.raises(ValueError, match=r"Expected 2 colors, got 1\."):
-        histo(
-            sample_df_counts,
-            ax,
-            Timedelta("1D"),
-            Timedelta("10s"),
-            color=["red"],
-            coordinates=(48.0, -4.0),
-        )
-
-
-def test_histo_legend_labels(ax: Axes, sample_df_counts: DataFrame):
-    histo(
-        sample_df_counts,
-        ax,
-        Timedelta("1D"),
-        Timedelta("10s"),
-        legend=True,
-        coordinates=(48.0, -4.0),
-    )
-    assert ax.get_legend() is not None
-    assert [t.get_text() for t in ax.get_legend().get_texts()] == [
-        "ann1",
-        "ann2",
-    ]
-
-
-def test_histo_season_southern_hemisphere(
-    ax: Axes,
-    sample_df_counts: DataFrame,
-    monkeypatch,
-):
-    season = Mock()
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.add_season_period",
-        season,
-    )
-    histo(
-        sample_df_counts,
-        ax,
-        Timedelta("1D"),
-        Timedelta("10s"),
-        season=True,
-        coordinates=(-33.0, 18.0),
-    )
-    season.assert_called_once_with(ax, northern=False)
-
-
-def test_scatter_skips_empty_cross_product_groups(ax: Axes, sample_df: DataFrame):
-    times = date_range("2025-01-01", periods=5, freq="D", tz="UTC")
+def test_scatter_multiple_annotator_label_groups(ax: Axes, sample_df: DataFrame):
     for ann, lbl in zip(["ann1", "ann2"], 2 * ["lbl1"]):
         df_filtered = sample_df[
             (sample_df["annotator"] == ann) & (sample_df["label"] == lbl)
         ]
-        scatter(df_filtered, ax, times)
+        scatter(df_filtered, ax)
     update_legend(ax)
     assert len(ax.collections) == 2
     assert sorted(c.get_label() for c in ax.collections) == [
         "ann1 - lbl1",
         "ann2 - lbl1",
     ]
-
-
-def test_scatter_coordinates_and_season(
-    ax: Axes,
-    sample_df: DataFrame,
-    monkeypatch,
-):
-    season = Mock()
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.add_season_period",
-        season,
-    )
-
-    times = date_range("2025-01-01", periods=5, freq="D", tz="UTC")
-
-    scatter(
-        sample_df,
-        ax,
-        times,
-        coordinates=(-33.0, 18.0),
-        season=True,
-    )
-
-    season.assert_called_once_with(
-        ax,
-        northern=False,
-    )
-
-
-def test_heatmap_coordinates_and_season(ax, sample_df, monkeypatch):
-    season = Mock()
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.add_season_period",
-        season,
-    )
-
-    times = date_range("2025-01-01", periods=5, freq="D", tz="UTC")
-
-    heatmap(
-        sample_df,
-        ax,
-        Timedelta("1D"),
-        times,
-        coordinates=(-33.0, 18.0),
-        season=True,
-    )
-
-    assert len(ax.images) == 1
-
-    season.assert_called_once_with(
-        ax,
-        northern=False,
-        bin_size=Timedelta("1D"),
-    )
-
-
-def test_heatmap_with_effort(
-    ax: Axes,
-    sample_df: DataFrame,
-    effort: RecordingEffort,
-    monkeypatch,
-):
-    shade = Mock()
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.shade_no_effort",
-        shade,
-    )
-    times = date_range("2025-01-01", periods=5, freq="D", tz="UTC")
-    heatmap(
-        sample_df,
-        ax,
-        Timedelta("1D"),
-        times,
-        coordinates=(48.0, -4.0),
-        effort=effort,
-    )
-    shade.assert_called_once()
-    assert shade.call_args.kwargs["observed"] is effort
-
-
-def test_timeline_with_effort(
-    ax: Axes,
-    sample_df: DataFrame,
-    effort: RecordingEffort,
-    monkeypatch,
-):
-    shade = Mock()
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.shade_no_effort",
-        shade,
-    )
-    timeline(sample_df, ax, effort=effort)
-    shade.assert_called_once()
-    assert shade.call_args.kwargs["observed"] is effort
-
-
-def test_timeline_with_season(
-    ax: Axes,
-    sample_df: DataFrame,
-    monkeypatch,
-):
-    season = Mock()
-    monkeypatch.setattr(
-        "disclose.utils.visualisation.add_season_period",
-        season,
-    )
-    timeline(sample_df, ax, season=True, coordinates=(-33.0, 18.0))
-    season.assert_called_once_with(ax, northern=False)
 
 
 @pytest.mark.parametrize(
@@ -665,19 +366,19 @@ def test_set_dynamic_ylim(
     assert ax.get_yticks().tolist() == expected_ticks
 
 
-def test_shade_no_effort_partial_effort_legend(
+def test_shade_no_effort_adds_no_data_legend_entry(
     ax: Axes,
     sample_df_counts: DataFrame,
     effort: RecordingEffort,
 ):
     histo(
-        sample_df_counts,
+        sample_df_counts.iloc[:, [0]],
         ax,
         Timedelta("1D"),
         Timedelta("12h"),
+        rank=0,
+        total=1,
     )
     shade_no_effort(ax, observed=effort, legend=True)
     labels = [t.get_text() for t in ax.get_legend().get_texts()]
-    # assert "partial data" in labels
-    # assert "detections" in labels
     assert "no data" in labels

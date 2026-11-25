@@ -324,7 +324,7 @@ def get_max_time(df: DataFrame) -> Timedelta | None:
     return Timedelta(df["end_time"].max(), "s")
 
 
-def get_dataset(df: DataFrame) -> str | list[str]:
+def get_dataset(df: DataFrame) -> str | list[str] | None:
     """Return dataset list of APLOSE DataFrame."""
     if df.empty:
         return None

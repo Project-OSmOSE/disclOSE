@@ -1,6 +1,5 @@
 """FPOD/ CPOD processing functions tests."""
 
-import secrets
 from datetime import tzinfo
 from pathlib import Path
 from types import SimpleNamespace
@@ -402,15 +401,11 @@ def sample_fb() -> DataFrame:
     })
 
 
-rng = secrets.SystemRandom()
-comp = rng.randrange(1, 5)
-
-
 def test_fit_gmm_output(sample_fb: DataFrame) -> None:
     """Test that basic structure and required columns are present."""
     clustering, ici_log, _ = fit_gmm(
         df=sample_fb,
-        comp=comp,
+        comp=3,
     )
 
     expected_columns = [
@@ -424,7 +419,7 @@ def test_fit_gmm_output(sample_fb: DataFrame) -> None:
     assert list(clustering.columns) == expected_columns
     assert clustering["Datetime"].iloc[0] != sample_fb["Datetime"].iloc[0]
     assert set(clustering["dataset"]) == {"deploy1", "deploy2", "deploy3"}
-    assert len(clustering["cluster"].unique()) == comp
+    assert len(clustering["cluster"].unique()) == 3
     assert len(clustering) == len(ici_log)
 
 
@@ -520,14 +515,11 @@ def sample_tl_df() -> DataFrame:
     })
 
 
-threshold = rng.randrange(1, 100)
-
-
 def test_timelost_process(sample_tl_df: DataFrame, timezone: tzinfo) -> None:
     """Test that basic structure and required columns are present."""
     result = process_timelost(
         df=sample_tl_df,
-        threshold=threshold,
+        threshold=50,
     )
 
     expected_columns = [

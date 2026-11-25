@@ -471,7 +471,22 @@ def test_add_season_valid() -> None:
     ts = date_range(start=start, end=stop, freq=freq, tz="UTC")
     values = [date.day for date in ts]
     [ax.bar(loc + freq, height) for loc, height in zip(ts, values, strict=True)]
+    initial_patch_count = len(ax.patches)
     add_season_period(ax=ax)
+
+    assert len(ax.patches) == initial_patch_count + 1
+
+
+def test_add_season_merges_months_in_same_season() -> None:
+    _, ax = plt.subplots()
+    start = Timestamp("2025-01-01")
+    end = Timestamp("2025-04-01")
+    ax.plot([start, end], [0, 1])
+    ax.set_xlim(start, end)
+
+    add_season_period(ax=ax)
+
+    assert [patch.get_width() for patch in ax.patches] == pytest.approx([59, 31])
 
 
 def test_add_season_no_data() -> None:

@@ -252,6 +252,11 @@ def test_compute_scores():
 
 
 def test_log_detection_results(sample_df: DataFrame):
+    df = sample_df[
+        sample_df["annotator"].isin(["ann1", "ann2"])
+        & (sample_df["label"] == "lbl1")
+        & (sample_df["type"] == "WEAK")
+    ]
     matrix = {
         "true_positive": 8,
         "false_positive": 2,
@@ -265,7 +270,7 @@ def test_log_detection_results(sample_df: DataFrame):
             selection1=("ann1", "lbl1"),
             selection2=("ann2", "lbl1"),
             matrix=matrix,
-            df=sample_df,
+            df=df,
         )
 
     log = mock_info.call_args[0][0]
@@ -286,6 +291,8 @@ def test_log_detection_results(sample_df: DataFrame):
     assert "Recall:" in log
     assert "0.67" in log
     assert "F-score:" in log
+    assert "Union:" in log
+    assert "Intersection:" in log
 
 
 # %% detection_perf

@@ -186,11 +186,16 @@ def add_season_period(
         msg = "Axes have no data"
         raise ValueError(msg)
 
-    bins = date_range(
-        start=Timestamp(ax.get_xlim()[0], unit="D").round("1ms"),
-        end=Timestamp(ax.get_xlim()[1], unit="D").round("1ms"),
-        periods=2000,
+    start = Timestamp(ax.get_xlim()[0], unit="D").round("1ms")
+    end = Timestamp(ax.get_xlim()[1], unit="D").round("1ms")
+    month_starts = date_range(
+        start=start.normalize().replace(day=1),
+        end=end,
+        freq="MS",
     )
+    bins = [start]
+    bins.extend(month for month in month_starts if start < month < end)
+    bins.append(end)
 
     season_colors = {
         "winter": "#84eceb",
@@ -199,22 +204,30 @@ def add_season_period(
         "autumn": "#f9c1a5",
     }
 
-    bin_centers = [
-        (bins[i].timestamp() + bins[i + 1].timestamp()) / 2
-        for i in range(len(bins) - 1)
-    ]
-    bin_centers = [Timestamp(center, unit="s") for center in bin_centers]
-
-    bin_seasons = [get_season(bc, northern=northern)[0] for bc in bin_centers]
     bar_height = set_bar_height(ax, bar_height)
     bar_bottom = ax.get_ylim()[1] + (0.2 * bar_height)
 
-    for i, season in enumerate(bin_seasons):
+    seasons = [
+        get_season(start + (end - start) / 2, northern=northern)[0]
+        for start, end in zip(bins[:-1], bins[1:], strict=True)
+    ]
+    season_intervals = []
+    interval_start = bins[0]
+    current_season = seasons[0]
+    for index, season in enumerate(seasons[1:], start=1):
+        if season != current_season:
+            season_intervals.append((interval_start, bins[index], current_season))
+            interval_start = bins[index]
+            current_season = season
+    season_intervals.append((interval_start, bins[-1], current_season))
+
+    for start, end, season in season_intervals:
+        center = start + (end - start) / 2
         ax.bar(
-            bin_centers[i],
+            center,
             height=bar_height,
             bottom=bar_bottom,
-            width=(bins[i + 1] - bins[i]),
+            width=(end - start),
             color=season_colors[season],
             align="center",
             zorder=2,

@@ -209,8 +209,8 @@ def test_histo(sample_csv_result: DataFrame, recording_planning_csv: DataFrame) 
         annotator="ann1",
         label="lbl1",
         bin_size=Timedelta("12h"),
-        effort=True,
     )
+    data.plot.feature(ax=ax, effort=True, bin_size=Timedelta("12h"))
 
 
 def test_histo_no_recording_file_provided(
@@ -232,13 +232,7 @@ def test_histo_no_recording_file_provided(
         date_format="%y-%m-%d",
     )
     with pytest.raises(ValueError, match=r"No recording file provided."):
-        data.plot.histogram(
-            ax=ax,
-            annotator="ann1",
-            label="lbl1",
-            bin_size=bin_size,
-            effort=True,
-        )
+        data.plot.feature(ax=ax, effort=True, bin_size=bin_size)
 
 
 def test_histo_no_recording_fake_file_provided(
@@ -260,13 +254,7 @@ def test_histo_no_recording_fake_file_provided(
         date_format="%y-%m-%d",
     )
     with pytest.raises(FileNotFoundError, match=r"File not found"):
-        data.plot.histogram(
-            ax=ax,
-            annotator="ann1",
-            label="lbl1",
-            bin_size=bin_size,
-            effort=True,
-        )
+        data.plot.feature(ax=ax, effort=True, bin_size=bin_size)
 
 
 def test_heatmap_wrong_bin(sample_df: DataFrame) -> None:
@@ -708,12 +696,19 @@ def test_polar_plot(sample_csv_result: Path, polar_ax: Axes) -> None:
     }
 
     obj = DetectionData.from_dict(config=config)
+    obj.coordinates = (0, 0)
 
     obj.plot.polar(
         annotator="ann1",
         label="lbl1",
         ax=polar_ax,
     )
+    initial_patch_count = len(polar_ax.patches)
+    obj.plot.feature(ax=polar_ax, rise_set=True)
+    assert len(polar_ax.patches) > initial_patch_count
+
+    with pytest.raises(ValueError, match="not supported on polar plots"):
+        obj.plot.feature(ax=polar_ax, season=True)
 
 
 # %% scatter
@@ -728,17 +723,27 @@ def test_scatter_plot(sample_csv_result: Path, recording_planning_csv: Path) -> 
     }
 
     obj = DetectionData.from_dict(config=config)
+    obj.coordinates = (0, 0)
     _, ax = plt.subplots()
 
     obj.plot.scatter(
         annotator="ann1",
         label="lbl1",
         ax=ax,
-        show_rise_set=True,
-        coordinates=(0, 0),
-        effort=True,
         bin_size=Timedelta("12h"),
     )
+    assert len(ax.lines) == 0
+    assert not isinstance(ax.xaxis.get_major_formatter(), mdates.DateFormatter)
+
+    obj.plot.set_ax(ax, x_ticks_res=Timedelta("12h"))
+    assert isinstance(ax.xaxis.get_major_formatter(), mdates.DateFormatter)
+
+    obj.plot.feature(
+        ax=ax,
+        rise_set=True,
+        effort=True,
+    )
+    assert len(ax.lines) == 2
 
 
 # %% timeline
@@ -752,14 +757,15 @@ def test_timeline_plot(sample_csv_result: Path) -> None:
     }
 
     obj = DetectionData.from_dict(config=config)
+    obj.coordinates = (0, 0)
     _, ax = plt.subplots()
 
     obj.plot.timeline(
         annotator="ann1",
         label="lbl1",
         ax=ax,
-        coordinates=(0, 0),
     )
+    obj.plot.feature(ax=ax, season=True)
 
 
 # %% __post_init__ / _localize
