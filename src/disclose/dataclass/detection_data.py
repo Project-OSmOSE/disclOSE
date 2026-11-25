@@ -29,6 +29,8 @@ from pandas import (
     date_range,
     isna,
     to_datetime,
+    NA,
+    cut,
 )
 from pandas.tseries import offsets
 
@@ -39,6 +41,7 @@ from disclose.utils.core import (
     get_count,
     get_labels_and_annotators,
     get_sun_times,
+    build_time_vector,
 )
 from disclose.utils.filtering import (
     get_annotators,
@@ -47,6 +50,7 @@ from disclose.utils.filtering import (
     get_max_time,
     get_timezone,
     load_detections,
+    _build_detection_vector,
 )
 from disclose.utils.metric import (
     Classification,
@@ -696,6 +700,40 @@ class DetectionData:
             effort=effort,
         )
 
+    def add_dpm(self) -> None:
+        """Add the detection per minute `DPM` column to DataFrame."""
+        self.df["dpm_count"] = NA
+        ts_detect_beg = self.df["start_datetime"].to_list()
+        ts_detect_end = self.df["end_datetime"].to_list()
+
+        annotators = (
+            [self.annotator] if isinstance(self.annotator, str) else self.annotator
+        )
+
+        for ann in annotators:
+            if ann.lower() in {"fpod", "cpod"}:
+                df_sel = self.df[(self.df["annotator"] == ann)]
+                time_vector = build_time_vector(df_sel, self.config.timebin_new)
+                bins = list(time_vector) + [time_vector[-1] + self.config.timebin_new]
+
+                detect_vec = _build_detection_vector(
+                    time_vector,
+                    ts_detect_beg,
+                    ts_detect_end,
+                )
+
+                counts = (
+                    cut(ts_detect_beg, bins=bins, right=False)
+                    .value_counts()
+                    .sort_index()
+                )
+
+                dpm_values = [
+                    counts.iloc[i] for i, detected in enumerate(detect_vec) if detected
+                ]
+
+                self.df.loc[df_sel.index, "dpm_count"] = dpm_values
+
 
 class PlotAccessor:
     """Plotting namespace of a ``DetectionData``, available as ``data.plot``.
@@ -1047,7 +1085,6 @@ class PlotAccessor:
         label: str | list[str],
         *,
         ax: Axes | None = None,
-        bin_size: Timedelta | BaseOffset | None = None,
         **kwargs: Any,
     ) -> Axes:
         """Scatter-plot detections (hour of day vs. time).
@@ -1058,16 +1095,12 @@ class PlotAccessor:
             Optional Axes to plot on; created automatically when omitted.
         annotator, label: str | list[str]
             Selection, see :meth:`DetectionData.filter_df`.
-        bin_size: Timedelta | BaseOffset | None
-            Accepted for compatibility; it currently does not affect the plot.
         **kwargs
             Additional styling options forwarded to ``ax.scatter``.
 
         """
         ax = self._get_ax(ax)
         data = self._data
-
-        bin_size = bin_size or get_max_time(data.df)
 
         labels, annotators = get_labels_and_annotators(data.filter_df(annotator, label))
 
@@ -1080,11 +1113,6 @@ class PlotAccessor:
             scatter(
                 df=df_filtered,
                 ax=ax,
-                # time_range=date_range(
-                #     start=data.start_datetime,
-                #     end=data.end_datetime,
-                #     freq=bin_size,
-                # ),
                 **kwargs,
             )
 
