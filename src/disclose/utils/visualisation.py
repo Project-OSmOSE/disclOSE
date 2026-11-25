@@ -1,4 +1,4 @@
-"""Plot functions used for DataAplose objects."""
+"""Plotting helpers for APLOSE-formatted detection data."""
 
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def histo(
     total: int,
     **kwargs: Any,
 ) -> None:
-    """Seasonality plot.
+    """Draw grouped detection-count bars for a time-binned histogram.
 
     Parameters
     ----------
@@ -308,14 +308,19 @@ def heatmap(
 
 
 def overview(df: DataFrame, annotator: str | list[str]) -> DataFrame:
-    """Overview of an APLOSE formatted DataFrame.
+    """Return detection counts by label and annotator as a pivot table.
 
     Parameters
     ----------
     df: DataFrame
         The Dataframe to analyze.
     annotator: str | list[str] | None
-        List of annotators.
+        Annotator or annotators to include.
+
+    Returns
+    -------
+    DataFrame
+        Counts indexed by label and with one column per annotator.
 
     """
     df = filter_by_annotator(df, annotator)
@@ -346,16 +351,23 @@ def plot_annotator_agreement(
     ax : plt.Axes
         Matplotlib axes object where the scatter plot and regression line will be drawn.
 
+    Returns
+    -------
+    Axes
+        The modified axes.
+
     Notes
     -----
-    The function modifies the provided axes object in place and does not return a value.
-    Each point in the scatter plot represents the label counts from both annotators
-    within a single time bin.
+    Each point represents the two selected count series for one time bin.
+    The input columns are expected to contain exactly two label/annotator pairs.
 
     Examples
     --------
+    >>> import matplotlib.pyplot as plt
+    >>> from pandas import DataFrame
+    >>> df_count = DataFrame({"label-ann1": [1, 0], "label-ann2": [0, 1]})
     >>> fig, ax = plt.subplots()
-    >>> plot_annotator_agreement(df, Timedelta(hours=1), ax)
+    >>> ax = plot_annotator_agreement(df_count, ax)
 
     """
     labels, annotators = zip(*[col.rsplit("-", 1) for col in df.columns], strict=True)
@@ -417,11 +429,10 @@ def timeline(
     df: DataFrame
         APLOSE DataFrame
     ax : Axes
-        Matplotlib axes object where the scatterplot and regression line will be drawn.
-    **kwargs: Additional keyword arguments depending on the mode.
-        - color: str | list[str]
-            Colour or list of colours for the histogram bars.
-            If not provided, default colours will be used.
+        Matplotlib axes object on which detections are plotted.
+    **kwargs
+        Plot options. ``color`` may be a list with one color per label; default
+        Matplotlib cycle colors are used when omitted.
 
     """
     color = kwargs.get("color")
@@ -518,10 +529,13 @@ def shade_no_effort(
     ax : plt.Axes
         The axes on which to draw the shaded regions.
     observed : RecordingEffort
-        A Series with observation counts or flags, indexed by datetime.
-        Should be aligned or re-indexable to `bin_starts`.
+        Recording-effort counts indexed by left-closed time intervals.
     legend : bool
-        Wether to add the legend entry for the shaded regions.
+        Whether to add legend entries for missing and partial effort.
+
+    Notes
+    -----
+    ``observed.counts`` must contain at least two intervals of equal width.
 
     """
     # Convert effort IntervalIndex → DatetimeIndex (bin starts)
@@ -597,7 +611,7 @@ def _draw_effort_spans(
     alpha: float,
     label: str,
 ) -> None:
-    """Draw vertical lines for effort plot."""
+    """Draw shaded spans for time bins with the given effort category."""
     for ts in effort_index:
         start = mdates.date2num(ts)
         ax.axvspan(
@@ -612,7 +626,11 @@ def _draw_effort_spans(
 
 
 def add_sunrise_sunset(ax: Axes, lat: float, lon: float, tz: tzinfo) -> None:
-    """Display sunrise/sunset times on plot."""
+    """Display local sunrise and sunset times across a time-based plot.
+
+    The axes x-limits determine the date range; ``tz`` is used to interpret
+    those dates and calculate the solar times.
+    """
     x_min, x_max = ax.get_xlim()
     start_date = Timestamp(num2date(x_min)).tz_convert(tz)
     end_date = Timestamp(num2date(x_max)).tz_convert(tz)

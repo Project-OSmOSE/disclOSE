@@ -1,8 +1,12 @@
-"""`data_aplose` module provides the `DataAplose` class.
+"""Data containers and plotting accessors for APLOSE detection data.
 
-`DataAplose` handles, analyzes and visualizes APLOSE-formatted detection data.
+``DetectionData`` handles, analyzes, and visualizes APLOSE-formatted detections.
 
->>> data = DetectionData.from_dict({"detection_file": Path("results.csv"), ...})
+>>> from pathlib import Path
+>>> import matplotlib.pyplot as plt
+>>> from pandas import Timedelta
+>>> from disclose.dataclass.detection_data import DetectionData
+>>> data = DetectionData.from_dict({"detection_file": Path("results.csv")})
 >>> data.coordinates = (48.39, -4.49)
 >>> fig, ax = plt.subplots()
 >>> data.plot.histogram("annotator", "label", bin_size=Timedelta("1D"), ax=ax)
@@ -171,11 +175,13 @@ class DetectionData:
 
     Examples
     --------
-    >>> from disclose.utils import metric
+    >>> from pathlib import Path
+    >>> import matplotlib.pyplot as plt
+    >>> from pandas import Timedelta
     >>> data = DetectionData.from_dict({"detection_file": Path("results.csv")})
     >>> data.coordinates = (48.39, -4.49)
     >>> data.change_tz("Europe/Paris")
-    >>> perf = metrics.detection_perf(("ann1", "ann2"), ("lbl1", "lbl1"))
+    >>> perf = data.detection_perf(("ann1", "ann2"), ("lbl1", "lbl1"))
     >>> _, ax = plt.subplots()
     >>> data.plot.histogram("ann1", "lbl1", Timedelta("1D"), ax=ax)
     >>> data.plot.feature(ax, season=True)
@@ -199,7 +205,7 @@ class DetectionData:
             raise ValueError(msg)
 
     def __str__(self) -> str:
-        """Return string representation of DataAplose object."""
+        """Return a summary of the data bounds, annotators, labels, and datasets."""
         return (
             f"start_datetime: {self.start_datetime}\n"
             f"end_datetime: {self.end_datetime}\n"
@@ -209,7 +215,7 @@ class DetectionData:
         )
 
     def __repr__(self) -> str:
-        """Return string representation of DataAplose object."""
+        """Return the same summary as :meth:`__str__`."""
         return self.__str__()
 
     # %% properties
@@ -375,8 +381,9 @@ class DetectionData:
 
         Returns
         -------
-        A ``DataAplose``, or a list of them if ``config`` is a list
-        and ``merge`` is ``False``.
+        DetectionData | list[DetectionData]
+            A single instance, or a list when ``config`` is a list and
+            ``merge`` is ``False``.
 
         """
         configs = DetectionConfig.from_dict(config)
@@ -563,7 +570,7 @@ class DetectionData:
         annotator: str | list[str],
         label: str | list[str],
     ) -> Self:
-        """Return a new DataAplose containing only selected detections.
+        """Return a new ``DetectionData`` containing only selected detections.
 
         Parameters
         ----------
@@ -586,7 +593,11 @@ class DetectionData:
     # %% analysis
 
     def overview(self, annotator: str | list[str]) -> DataFrame:
-        """Plot an overview of the detections of the given annotator(s)."""
+        """Return a table of detection counts by label and annotator.
+
+        If ``annotator`` is provided, the table is restricted to the selected
+        annotator or annotators.
+        """
         return overview(df=self.df, annotator=annotator)
 
     def detection_perf(
@@ -639,10 +650,10 @@ class DetectionData:
 
 
 class PlotAccessor:
-    """Plotting namespace of a `DataAplose`, available as ``data.plot``.
+    """Plotting namespace of a ``DetectionData``, available as ``data.plot``.
 
     Plot methods accept an optional keyword-only ``ax`` and create one when absent.
-    Use :meth:`set_ax` to format the time axis and :meth:`feature` to add overlays.
+    Use `set_ax` to format the time axis and `feature` to add overlays.
     The accessor is callable, like in pandas: ``data.plot("polar", ...)``
     is the same as ``data.plot.polar(...)``.
     """
@@ -652,7 +663,7 @@ class PlotAccessor:
     )
 
     def __init__(self, data: DetectionData) -> None:
-        """Bind the accessor to a ``DataAplose``."""
+        """Bind the accessor to a ``DetectionData`` instance."""
         self._data = data
 
     def __call__(self, kind: str, *args: Any, **kwargs: Any) -> Any:  # ruff: ignore[any-type]
@@ -707,8 +718,9 @@ class PlotAccessor:
         ----------
         ax: Axes
             The Axes object to configure.
-        x_ticks_res: int | Timedelta | BaseOffset
-            Resolution of the x-axis major ticks.
+        x_ticks_res: int | Timedelta | BaseOffset | None
+            Optional resolution of the x-axis major ticks. Integers are treated
+            as seconds; ``None`` leaves the locator unchanged.
         date_format: str
             Date format of the x-axis tick labels (e.g. ``"%b"``, ``"%Y-%m-%d %H:%M"``).
 
@@ -867,7 +879,7 @@ class PlotAccessor:
         ax: Axes | None
             Axes to plot on.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection.
         bin_size: Timedelta | BaseOffset
             Width of the bars.
 
@@ -928,7 +940,7 @@ class PlotAccessor:
         ax: Axes | None
             Optional polar Axes; created with a polar projection when omitted.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection, see :meth:`DetectionData.filter_df`.
         **kwargs
             Forwarded to ``ax.bar`` (color, alpha, edgecolor...).
 
@@ -963,7 +975,7 @@ class PlotAccessor:
         ax: Axes | None
             Optional Axes to plot on; created automatically when omitted.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection.
         bin_size: Timedelta | BaseOffset
             Size of the cells. Must be >= 24h.
 
@@ -997,9 +1009,9 @@ class PlotAccessor:
         ax: Axes | None
             Optional Axes to plot on; created automatically when omitted.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection, see :meth:`DetectionData.filter_df`.
         bin_size: Timedelta | BaseOffset | None
-            Resolution of the time vector. Defaults to the detection duration.
+            Accepted for compatibility; it currently does not affect the plot.
         **kwargs
             Additional styling options forwarded to ``ax.scatter``.
 
@@ -1047,10 +1059,9 @@ class PlotAccessor:
         ax: Axes | None
             Optional Axes to plot on; created automatically when omitted.
         annotator, label: str | list[str]
-            Selection, see ``DataAplose.filter_df``.
+            Selection, see :meth:`DetectionData.filter_df`.
         color: list[str] | None
             One color per label.
-        Use ``feature(ax, season=True, effort=True)`` to add overlays.
 
         """
         ax = self._get_ax(ax)

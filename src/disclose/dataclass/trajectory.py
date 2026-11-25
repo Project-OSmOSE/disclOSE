@@ -67,9 +67,9 @@ class Trajectory:
 
         Returns
         -------
-        [float, float]
-            Interpolated latitude and longitude.
-            Returns (nan, nan) if insufficient data.
+        tuple[float, float]
+            Interpolated latitude and longitude. Returns ``(nan, nan)`` until
+            at least two positions are available for interpolation.
 
         """
         if self.lat_interp is None or self.lon_interp is None:
