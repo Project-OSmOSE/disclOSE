@@ -748,3 +748,44 @@ def test_percent_barplot_empty() -> None:
         assert not ax.patches
     finally:
         plt.close(fig)
+
+
+def test_percent_barplot_missing_std(caplog: pytest.LogCaptureFixture) -> None:
+    df = DataFrame({"Month": ["Jan"], "Site": ["A"], "FBR_mean": [10.0]})
+
+    ax = percent_barplot(
+        df,
+        "Month",
+        "FBR",
+        show_std=True,
+        legend=False,
+        shade_missing=False,
+        dynamic_ylim=False,
+    )
+
+    assert ax.get_title() == "FBR per Month"
+    assert "show_std=True but column 'FBR_std' not found in df." in caplog.text
+    plt.close(ax.figure)
+
+
+def test_percent_barplot_all_nan(caplog: pytest.LogCaptureFixture) -> None:
+    df = DataFrame({"Month": ["Jan"], "Site": ["A"], "FBR_mean": [float("nan")]})
+
+    assert percent_barplot(df, "Month", "FBR") is None
+    assert "has no plottable data" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("ext", "message"),
+    [
+        ("tsv", "Invalid file extension"),
+        ("csv", r"No \.csv files found"),
+    ],
+)
+def test_load_pod_folder_rejects_invalid_or_empty_input(
+    tmp_path: Path,
+    ext: str,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        load_pod_folder(tmp_path, ext)

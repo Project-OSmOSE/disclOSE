@@ -308,12 +308,17 @@ def compute_acoustic_diversity(
     # compute trajectory object from glider navigation data
     trajectory = set_trajectory(nav=track_data)
 
-    # compute localisation of each detection
+    # compute localization of each detection
+    time_vector = [
+        ts
+        for ts in time_vector
+        if trajectory.timestamps.min() <= ts.timestamp() <= trajectory.timestamps.max()
+    ]
     df_acoustic_diversity = DataFrame(
         columns=["Timestamp", "Latitude", "Longitude", "Acoustic Diversity"],
     )
 
-    lat_time_vector, lon_time_vector, ts_time_vector = get_position_from_timestamp(
+    lat_time_vector, lon_time_vector, _ = get_position_from_timestamp(
         traj=trajectory,
         time_vector=time_vector,
     )
@@ -325,7 +330,7 @@ def compute_acoustic_diversity(
     time_det_unix = [ts.timestamp() for ts in det["start_datetime"]]
 
     acoustic_diversity = np.zeros(len(time_vector), dtype=int)
-    for i, ts in enumerate(time_vector[: -(len(time_vector) - len(ts_time_vector))]):
+    for i, ts in enumerate(time_vector):
         for ts_det in time_det_unix:
             if (
                 ts.timestamp() <= ts_det <= ts.timestamp() + 1

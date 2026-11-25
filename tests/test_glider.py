@@ -1,6 +1,8 @@
 import matplotlib as mpl
+import matplotlib.dates as mdates
 import pytest
-from numpy import arange, linspace
+from matplotlib import pyplot as plt
+from numpy import arange, array, linspace
 
 from disclose.utils.glider import (
     compute_acoustic_diversity,
@@ -8,6 +10,7 @@ from disclose.utils.glider import (
     get_position_from_timestamp,
     load_glider_nav,
     plot_detections_with_nav_data,
+    plot_nav_state,
     set_trajectory,
 )
 
@@ -48,9 +51,12 @@ def test_set_trajectory(nav_df: DataFrame) -> None:
 
 def test_get_position_from_timestamp(nav_df: DataFrame) -> None:
     traj = set_trajectory(nav_df)
-    times = list(nav_df["Timestamp"])
+    times = [
+        *nav_df["Timestamp"],
+        nav_df["Timestamp"].iloc[-1] + Timedelta(hours=1),
+    ]
     lat, lon, ts = get_position_from_timestamp(traj, times)
-    assert len(lat) == len(times)
+    assert len(lat) == len(times) - 1
     assert all(isinstance(x, float) for x in lat)
 
 
@@ -87,6 +93,23 @@ def test_load_glider_nav_no_files(tmp_path: Path) -> None:
         load_glider_nav(tmp_path)
 
 
+def test_plot_nav_state(nav_df: DataFrame) -> None:
+    timestamps = mdates.date2num(nav_df["Timestamp"].dt.tz_localize(None))
+    nav = nav_df.assign(Timestamp=timestamps)
+    npz = {
+        "Freq": arange(4),
+        "LTAS": arange(12).reshape(4, 3),
+        "time": array([timestamps[0], timestamps[-1]]),
+    }
+    before = set(plt.get_fignums())
+    try:
+        plot_nav_state(nav, npz)
+        assert len(plt.gcf().axes) == 3
+    finally:
+        for number in set(plt.get_fignums()) - before:
+            plt.close(number)
+
+
 def test_compute_acoustic_diversity(
     df_detections: DataFrame,
     nav_df: DataFrame,
@@ -95,6 +118,7 @@ def test_compute_acoustic_diversity(
     result = compute_acoustic_diversity(df_detections, nav_df, time_vector)
     assert isinstance(result, DataFrame)
     assert "Acoustic Diversity" in result.columns
+    assert result["Acoustic Diversity"].tolist() == [1, 1, 1, 0, 0]
 
 
 def test_export_gpx(nav_df: DataFrame, tmp_path: Path) -> None:

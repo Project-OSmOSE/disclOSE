@@ -688,6 +688,29 @@ def test_get_locator_from_offset_unsupported() -> None:
 # %% polar
 
 
+@pytest.mark.parametrize(
+    ("features", "message"),
+    [
+        pytest.param({"season": True}, "Latitude must be provided.", id="season"),
+        pytest.param(
+            {"rise_set": True}, "Coordinates must be provided.", id="rise_set"
+        ),
+    ],
+)
+def test_feature_requires_coordinates(
+    sample_df: DataFrame,
+    features: dict[str, bool],
+    message: str,
+) -> None:
+    data = DetectionData(sample_df)
+    fig, ax = plt.subplots()
+    try:
+        with pytest.raises(ValueError, match=message):
+            data.plot.feature(ax=ax, **features)
+    finally:
+        plt.close(fig)
+
+
 def test_polar_plot(sample_csv_result: Path, polar_ax: Axes) -> None:
     config = {
         "detection_file": sample_csv_result,
