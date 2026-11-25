@@ -881,6 +881,13 @@ class PlotAccessor:
             if color:
                 kwargs["color"] = color[i]
 
+            if len(set(annotators)) == 1:
+                kwargs["label"] = labels[i]
+            elif len(set(labels)) == 1:
+                kwargs["label"] = annotators[i]
+            else:
+                kwargs["label"] = f"{annotators[i]} - {labels[i]}"
+
             histo(
                 df=get_count(df_filtered, bin_size),
                 ax=ax,

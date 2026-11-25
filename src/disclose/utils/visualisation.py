@@ -72,8 +72,6 @@ def histo(
     **kwargs: Additional keyword arguments depending on the mode.
 
     """
-    label, annotator = df.columns[0].split("-")
-
     bin_size_str = get_bin_size_str(bin_size)
 
     _, _, bin_size = round_begin_end_timestamps(list(df.index), bin_size)
@@ -90,7 +88,6 @@ def histo(
         df.iloc[:, 0],
         width=bar_width_days,
         align="edge",
-        label=label,
         **kwargs,
     )
 
