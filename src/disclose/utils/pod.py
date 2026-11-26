@@ -186,11 +186,11 @@ def _filter_csv_data(data: DataFrame) -> DataFrame:
 
 def _process_txt_data(data: DataFrame) -> DataFrame:
     """Process TXT data with datetime conversion."""
-    data["Datetime"] = data.apply(get_feeding_buzz_datetime, axis=1)
+    data["Datetime"] = data.apply(_get_feeding_buzz_timestamp, axis=1)
     return data.drop_duplicates().sort_values(by=["Datetime"]).reset_index(drop=True)
 
 
-def get_feeding_buzz_datetime(row: Series) -> Timestamp:
+def _get_feeding_buzz_timestamp(row: Series) -> Timestamp:
     """Convert feeding buzz timestamp into a standard Timestamp.
 
     The conversion method differs based on the POD type.
@@ -216,9 +216,10 @@ def get_feeding_buzz_datetime(row: Series) -> Timestamp:
     raise ExceptionGroup(msg, exceptions)
 
 
-def process_feeding_buzz(
+def get_feeding_buzz(
     df: DataFrame,
     species: str,
+    tz: pytz.timezone,
 ) -> DataFrame:
     """Classify inter-click intervals and summarize buzz events by minute.
 
@@ -232,6 +233,8 @@ def process_feeding_buzz(
         Feeding-buzz detections with a ``Datetime`` column.
     species: str
         One of ``"delphinid"``, ``"porpoise"``, or ``"commerson"``.
+    tz: pytz.timezone
+        Timezone to localize the timestamps.
 
     Returns
     -------
@@ -279,8 +282,9 @@ def process_feeding_buzz(
         df_buzz["Buzz"] != 0,
         downcast="integer",
     ).astype(int)
+    df_buzz["Datetime"] = [dt.tz_localize(tz) for dt in df_buzz["Datetime"]]
 
-    return df_buzz
+    return df_buzz.rename(columns={"Buzz": "buzz", "Datetime": "datetime"})
 
 
 def compute_ici(df: DataFrame) -> DataFrame:
@@ -360,6 +364,8 @@ def _mixture_density(gmm: GaussianMixture, x_range: ndarray) -> ndarray:
 
 def gmm_feeding_buzz(df: DataFrame, comp: int) -> DataFrame:
     """Categorize ICIs with a GMM and aggregate foraging activity per minute.
+
+    From Pirotta et al., 2014.
 
     Parameters
     ----------
@@ -449,7 +455,7 @@ def plot_gmm_ici(df: DataFrame, comp: int) -> tuple[plt.Figure, plt.Axes]:
     return fig, ax
 
 
-def process_timelost(df: DataFrame, threshold: int = 0) -> DataFrame:
+def process_timelost(df: DataFrame, tz: pytz.timezone, threshold: int = 0) -> DataFrame:
     """Process TimeLost DataFrame.
 
     Floors ``Datetime`` values to the hour, keeps rows whose ``%TimeLost`` is no
@@ -462,6 +468,8 @@ def process_timelost(df: DataFrame, threshold: int = 0) -> DataFrame:
         All your Environmental data files.
     threshold: int
         Maximum allowed ``%TimeLost`` value, from 0 to 100 inclusive.
+    tz: pytz.timezone
+        Timezone to localize the Timestamps.
 
     Returns
     -------
@@ -492,12 +500,25 @@ def process_timelost(df: DataFrame, threshold: int = 0) -> DataFrame:
             "Deploy",
         }
     ]
+
+    df = df.rename(
+        columns={
+            "File": "filename",
+            "Datetime": "datetime",
+            "Temp": "temperature",
+            "Angle": "angle",
+            "Deploy": "deploy",
+            "%TimeLost": "%timelost",
+        }
+    )
+    df["datetime"] = [dt.tz_localize(tz) for dt in df["datetime"]]
+
     return (
-        df[df["%TimeLost"] <= threshold]
+        df[df["%timelost"] <= threshold]
         .drop(
             columns=cols_to_drop,
         )
-        .sort_values(["Datetime"])
+        .sort_values(["datetime"])
         .reset_index(drop=True)
     )
 
