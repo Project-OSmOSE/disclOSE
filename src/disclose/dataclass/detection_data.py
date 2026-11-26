@@ -27,6 +27,7 @@ from pandas import (
     Timedelta,
     concat,
     date_range,
+    isna,
     to_datetime,
 )
 from pandas.tseries import offsets
@@ -198,11 +199,58 @@ class DetectionData:
     _end_datetime: Timestamp | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Check that the DataFrame is APLOSE-formatted."""
+        """Check APLOSE formatting and infer missing configuration values."""
         missing = [col for col in APLOSE_COLUMNS if col not in self.df.columns]
         if missing:
             msg = f"DataFrame is not APLOSE-formatted, missing columns: {missing}"
             raise ValueError(msg)
+
+        self._infer_config_from_dataframe()
+
+    def _infer_config_from_dataframe(self) -> None:
+        """Fill unset config fields using metadata present in the DataFrame."""
+        if self.df.empty:
+            return
+
+        config_fields = {
+            "annotator": get_annotators(self.df),
+            "label": get_labels(self.df),
+        }
+        for field_name, reduction in (
+            ("min_frequency", "min"),
+            ("max_frequency", "max"),
+        ):
+            if field_name in self.df.columns:
+                config_fields[field_name] = getattr(self.df[field_name], reduction)()
+
+        config_fields.update(
+            {
+                "start_datetime": to_datetime(
+                    self.df["start_datetime"],
+                    format="mixed",
+                    utc=True,
+                ).min(),
+                "end_datetime": to_datetime(
+                    self.df["end_datetime"],
+                    format="mixed",
+                    utc=True,
+                ).max(),
+                "timebin_origin": get_max_time(self.df),
+            },
+        )
+
+        if "type" in self.df.columns:
+            types = self.df["type"].dropna().unique()
+            if len(types) == 1:
+                config_fields["type"] = types[0]
+
+        for field_name, value in config_fields.items():
+            if (
+                getattr(self.config, field_name) is None
+                and value is not None
+                and (isinstance(value, (str, list)) or not isna(value))
+            ):
+                setattr(self.config, field_name, value)
 
     def __str__(self) -> str:
         """Return a summary of the data bounds, annotators, labels, and datasets."""
@@ -304,7 +352,7 @@ class DetectionData:
         if config_value is not None:
             candidates.append(self._localize(config_value))
         if not self.df.empty:
-            series = self.df[column]
+            series = to_datetime(self.df[column], format="mixed", utc=True)
             candidates.append(series.min() if earliest else series.max())
         if not candidates:
             return None

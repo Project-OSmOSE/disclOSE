@@ -13,6 +13,7 @@ from matplotlib.axes import Axes
 from pandas import DataFrame, Timedelta, Timestamp
 from pandas.tseries import frequencies
 
+from disclose.dataclass.detection_config import DetectionConfig
 from disclose.dataclass.detection_data import (
     DetectionData,
     PlotAccessor,
@@ -55,6 +56,64 @@ def test_data_aplose_init(sample_df: DataFrame) -> None:
     assert data.dataset == "sample_dataset"
     assert data.start_datetime == sample_df["start_datetime"].min()
     assert data.end_datetime == sample_df["end_datetime"].max()
+
+
+def test_config_is_inferred_from_dataframe(sample_df: DataFrame) -> None:
+    source_df = sample_df[sample_df["type"] == "WEAK"]
+    df = source_df.copy()
+    for column in ("start_datetime", "end_datetime"):
+        df[column] = df[column].dt.strftime("%Y-%m-%d %H:%M:%S.%f%z")
+    config = DetectionConfig.from_dict({"timebin_new": Timedelta("1min")})
+    data = DetectionData(df, config=config)
+
+    assert data.config.annotator == data.annotator
+    assert data.config.label == data.label
+    assert data.config.min_frequency == df["min_frequency"].min()
+    assert data.config.max_frequency == df["max_frequency"].max()
+    assert data.config.start_datetime == source_df["start_datetime"].min()
+    assert data.config.end_datetime == source_df["end_datetime"].max()
+    assert data.start_datetime == source_df["start_datetime"].min()
+    assert data.end_datetime == source_df["end_datetime"].max()
+    assert data.config.timebin_origin == Timedelta("10s")
+    assert data.config.type == "WEAK"
+    assert data.config.timebin_new == Timedelta("1min")
+
+
+def test_config_inference_preserves_explicit_values(sample_df: DataFrame) -> None:
+    explicit_min_frequency = 100
+    explicit_max_frequency = 20_000
+    config = DetectionConfig(
+        annotator="selected_annotator",
+        label="selected_label",
+        min_frequency=explicit_min_frequency,
+        max_frequency=explicit_max_frequency,
+        type="BOX",
+        timebin_origin=Timedelta("2s"),
+    )
+
+    data = DetectionData(sample_df, config=config)
+
+    assert data.config.annotator == "selected_annotator"
+    assert data.config.label == "selected_label"
+    assert data.config.min_frequency == explicit_min_frequency
+    assert data.config.max_frequency == explicit_max_frequency
+    assert data.config.type == "BOX"
+    assert data.config.timebin_origin == Timedelta("2s")
+    assert data.config.start_datetime == sample_df["start_datetime"].min()
+    assert data.config.end_datetime == sample_df["end_datetime"].max()
+
+
+def test_config_inference_skips_unavailable_or_ambiguous_values(
+    sample_df: DataFrame,
+) -> None:
+    df = sample_df.drop(columns=["min_frequency", "max_frequency"])
+
+    data = DetectionData(df)
+
+    assert data.config.min_frequency is None
+    assert data.config.max_frequency is None
+    assert data.config.type is None
+    assert data.config.timebin_origin == Timedelta("10s")
 
 
 @pytest.mark.parametrize(
