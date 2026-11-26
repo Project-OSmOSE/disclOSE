@@ -20,7 +20,7 @@ from disclose.utils.pod import (
     compute_ici,
     create_matrix,
     fit_gmm,
-    get_feeding_buzz_datetime,
+    _get_feeding_buzz_timestamp,
     get_group_colors,
     gmm_feeding_buzz,
     load_pod_folder,
@@ -28,7 +28,7 @@ from disclose.utils.pod import (
     percent_calc,
     plot_gmm_ici,
     pod2aplose,
-    process_feeding_buzz,
+    get_feeding_buzz,
     process_timelost,
 )
 
@@ -136,7 +136,7 @@ def test_folder_single_txt(
 ) -> None:
     """Test processing a single CSV file."""
     monkeypatch.setattr(
-        "disclose.utils.pod.process_feeding_buzz",
+        "disclose.utils.pod.get_feeding_buzz",
         lambda df, species: df,
     )
     txt_file = tmp_path / "click_folder" / "click_dataframe.txt"
@@ -487,13 +487,13 @@ def test_species_clustering(
     """Mocked read_csv to test load_pod_folder column validation."""
     if should_raise:
         with pytest.raises((ValueError, KeyError)):
-            process_feeding_buzz(df=mocked_df, species=mocked_species)
+            get_feeding_buzz(df=mocked_df, species=mocked_species, tz=pytz.utc)
         return
 
-    result = process_feeding_buzz(df=mocked_df, species=mocked_species)
+    result = get_feeding_buzz(df=mocked_df, species=mocked_species, tz=pytz.utc)
 
     assert isinstance(result, DataFrame)
-    assert list(result.columns) == ["Datetime", "Buzz", "fbm_count"]
+    assert list(result.columns) == ["datetime", "buzz", "fbm_count"]
     assert len(result) == 1
 
 
@@ -520,20 +520,21 @@ def test_timelost_process(sample_tl_df: DataFrame, timezone: tzinfo) -> None:
     result = process_timelost(
         df=sample_tl_df,
         threshold=50,
+        tz=pytz.utc,
     )
 
     expected_columns = [
-        "File",
-        "Temp",
-        "Angle",
-        "%TimeLost",
-        "Deploy",
-        "Datetime",
+        "filename",
+        "temperature",
+        "angle",
+        "%timelost",
+        "deploy",
+        "datetime",
     ]
 
     assert isinstance(result, DataFrame)
     assert list(result.columns) == expected_columns
-    assert set(result["Deploy"]) == {"deploy1", "deploy2"}
+    assert set(result["deploy"]) == {"deploy1", "deploy2"}
 
 
 # Additional POD utility tests
@@ -550,12 +551,12 @@ def test_get_feeding_buzz_datetime(
     expected: Timestamp,
 ) -> None:
     row = Series({"Minute": minute, "microsec": microsec})
-    assert get_feeding_buzz_datetime(row) == expected
+    assert _get_feeding_buzz_timestamp(row) == expected
 
 
 def test_get_feeding_buzz_datetime_invalid() -> None:
     with pytest.raises(ExceptionGroup, match="Could not convert"):
-        get_feeding_buzz_datetime(Series({"Minute": "invalid", "microsec": 10}))
+        _get_feeding_buzz_timestamp(Series({"Minute": "invalid", "microsec": 10}))
 
 
 def test_compute_ici() -> None:
@@ -601,7 +602,7 @@ def test_percent_calc() -> None:
 @pytest.mark.parametrize("threshold", [-1, 101, 1.5])
 def test_process_timelost_invalid_threshold(threshold: float) -> None:
     with pytest.raises(ValueError, match="Threshold"):
-        process_timelost(DataFrame(), threshold=threshold)
+        process_timelost(DataFrame(), threshold=threshold, tz=pytz.utc)
 
 
 def test_get_group_colors() -> None:
@@ -665,8 +666,8 @@ def test_gmm_feeding_buzz(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["Buzz"].tolist() == [2.0, 0.0]
     assert result["fbm_count"].tolist() == [1, 0]
     assert result["start_datetime"].tolist() == [
-        Timestamp("2024-01-01 12:00"),
-        Timestamp("2024-01-01 12:01"),
+        Timestamp("2024-01-01 12:00", tz="UTC"),
+        Timestamp("2024-01-01 12:01", tz="UTC"),
     ]
 
 

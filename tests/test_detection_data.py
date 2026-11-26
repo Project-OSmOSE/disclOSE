@@ -116,6 +116,47 @@ def test_config_inference_skips_unavailable_or_ambiguous_values(
     assert data.config.timebin_origin == Timedelta("10s")
 
 
+def _dpm_data(annotator: str, tmp_path: Path) -> DetectionData:
+    start_datetime = [
+        Timestamp("2025-01-25 00:00:10"),
+        Timestamp("2025-01-25 00:01:10"),
+    ]
+    df = DataFrame({
+        "dataset": ["dataset", "dataset"],
+        "filename": ["file1", "file2"],
+        "start_datetime": start_datetime,
+        "end_datetime": [ts + Timedelta(seconds=10) for ts in start_datetime],
+        "start_time": [10, 70],
+        "end_time": [20, 80],
+        "label": ["label", "label"],
+        "annotator": [annotator, annotator],
+    })
+    detection_file = tmp_path / "dpm_detections.csv"
+    df.to_csv(detection_file, index=False)
+    config = DetectionConfig(
+        detection_file=detection_file,
+        timebin_new=Timedelta(minutes=1),
+    )
+    return DetectionData(df, config=config)
+
+
+@pytest.mark.parametrize("annotator", ["FPOD", "CPOD"])
+def test_add_dpm_supported_annotators(annotator: str, tmp_path: Path) -> None:
+    data = _dpm_data(annotator, tmp_path)
+
+    data.add_dpm()
+
+    assert data.df["dpm_count"].tolist() == [1, 1]
+
+
+def test_add_dpm_ignores_other_annotators(tmp_path: Path) -> None:
+    data = _dpm_data("ann1", tmp_path)
+
+    data.add_dpm()
+
+    assert data.df["dpm_count"].isna().all()
+
+
 @pytest.mark.parametrize(
     ("value", "expected_msg"),
     [
@@ -812,7 +853,6 @@ def test_scatter_plot(sample_csv_result: Path, recording_planning_csv: Path) -> 
         annotator="ann1",
         label="lbl1",
         ax=ax,
-        bin_size=Timedelta("12h"),
     )
     assert len(ax.lines) == 0
     assert not isinstance(ax.xaxis.get_major_formatter(), mdates.DateFormatter)
