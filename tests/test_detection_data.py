@@ -848,7 +848,6 @@ def test_scatter_plot(sample_csv_result: Path, recording_planning_csv: Path) -> 
         annotator="ann1",
         label="lbl1",
         ax=ax,
-        bin_size=Timedelta("12h"),
     )
     assert len(ax.lines) == 0
     assert not isinstance(ax.xaxis.get_major_formatter(), mdates.DateFormatter)
