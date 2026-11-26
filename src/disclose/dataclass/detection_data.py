@@ -31,6 +31,7 @@ from pandas import (
     to_datetime,
     NA,
     cut,
+    read_csv,
 )
 from pandas.tseries import offsets
 
@@ -702,9 +703,12 @@ class DetectionData:
 
     def add_dpm(self) -> None:
         """Add the detection per minute `DPM` column to DataFrame."""
+        df_dpm = read_csv(
+            self.config.detection_file, parse_dates=["start_datetime", "end_datetime"]
+        )
         self.df["dpm_count"] = NA
-        ts_detect_beg = self.df["start_datetime"].to_list()
-        ts_detect_end = self.df["end_datetime"].to_list()
+        ts_detect_beg = df_dpm["start_datetime"].to_list()
+        ts_detect_end = df_dpm["end_datetime"].to_list()
 
         annotators = (
             [self.annotator] if isinstance(self.annotator, str) else self.annotator
